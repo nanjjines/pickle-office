@@ -319,8 +319,8 @@ function drawLoop(t) {
   for (const d of drawn) {
     const tw = ctx.measureText(d.name).width;
     const w = Math.max(30, tw + 13);
-    const nx = Math.round(d.x + 15 - w / 2);
-    const ny = Math.round(d.y + SPRITE_H - 4);
+    const nx = Math.round(d.x + 16 - w / 2);
+    const ny = Math.round(d.y + SPRITE_H + 1);
     ctx.fillStyle = '#FFFCF5';
     ctx.fillRect(nx, ny, w, 13);
     ctx.fillStyle = STATUS_COLORS[d.status] || '#16A34A';
@@ -913,6 +913,10 @@ function boot() {
   if (!roomCode && savedRoom) { roomCode = savedRoom; updateRoomChip(); }
   const params = new URLSearchParams(location.search).get('room');
   if (params) { roomCode = params; localStorage.setItem(LS_ROOM, roomCode); updateRoomChip(); }
+
+  // ?tab=work 처럼 구역을 바로 열 수 있게 (공유용)
+  const tabParam = new URLSearchParams(location.search).get('tab');
+  if (tabParam && ['office', 'meeting', 'work', 'notice'].includes(tabParam)) switchTab(tabParam);
 
   try {
     const saved = JSON.parse(localStorage.getItem(LS_ME) || 'null');
