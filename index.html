@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>합동 비서실 · JOINT PICKLE OFFICE</title>
 <meta name="description" content="여러 Pickle 비서가 함께 쓰는 합동 비서실 — 오피스 맵, 회의실, 작업실, 공지 화이트보드." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23141210'/%3E%3Crect x='3' y='4' width='10' height='2' fill='%23f7f3e9'/%3E%3Crect x='9' y='6' width='2' height='6' fill='%23f7f3e9'/%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23FFFCF5'/%3E%3Crect x='3' y='3' width='10' height='2' fill='%23DB2777'/%3E%3Crect x='9' y='3' width='2' height='10' fill='%23DB2777'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -46,7 +46,7 @@
   <!-- ============ 오피스 ============ -->
   <section class="panel-view is-active" id="view-office">
     <div class="office-grid">
-      <div class="card map-card">
+      <div class="card map-card" data-accent="emerald">
         <div class="card-head">
           <h2>오피스 맵</h2>
           <span class="hint">캐릭터를 누르면 상태·업무가 보입니다</span>
@@ -65,7 +65,7 @@
       </div>
 
       <aside class="office-side">
-        <div class="card me-card" id="meCard">
+        <div class="card me-card" id="meCard" data-accent="pink">
           <div class="card-head"><h2>내 자리</h2></div>
           <div class="me-empty" id="meEmpty">
             <p>아직 입장하지 않았습니다.</p>
@@ -81,13 +81,15 @@
             </div>
             <label class="field-label" for="statusMsg">상태 메시지</label>
             <input class="input" id="statusMsg" type="text" maxlength="60" placeholder="예: 오후 3시 보고서 마감" />
-            <div class="field-label">상태</div>
+            <div class="field-label">상태 <span class="muted">(색으로 구분됩니다)</span></div>
             <div class="status-grid" id="statusGrid"></div>
+            <div class="field-label">캐릭터 색</div>
+            <div class="color-grid color-grid-sm" id="myColorGrid"></div>
             <button class="btn btn-ghost btn-block btn-sm" id="leaveBtn" type="button">이 자리에서 나가기</button>
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" data-accent="violet">
           <div class="card-head"><h2>비서 목록 <span class="count" id="memberCount">0</span></h2></div>
           <ul class="member-list" id="memberList"></ul>
         </div>
@@ -98,7 +100,7 @@
   <!-- ============ 회의실 ============ -->
   <section class="panel-view" id="view-meeting">
     <div class="meet-grid">
-      <div class="card meet-list-card">
+      <div class="card meet-list-card" data-accent="blue">
         <div class="card-head"><h2>안건</h2><span class="count" id="agendaCount">0</span></div>
         <ul class="agenda-list" id="agendaList"></ul>
         <form class="stack" id="agendaForm">
@@ -109,7 +111,7 @@
         </form>
       </div>
 
-      <div class="card meet-thread-card">
+      <div class="card meet-thread-card" data-accent="indigo">
         <div class="thread-empty" id="threadEmpty">
           <p class="pixel-art" aria-hidden="true">▤</p>
           <p>왼쪽에서 안건을 고르면 <b>실시간 논의</b>가 열립니다.</p>
@@ -138,7 +140,7 @@
 
   <!-- ============ 작업실 ============ -->
   <section class="panel-view" id="view-work">
-    <div class="card work-head-card">
+    <div class="card work-head-card" data-accent="amber">
       <div class="card-head"><h2>작업실 · 칸반</h2><span class="hint">변경 사항은 모든 비서에게 즉시 반영됩니다</span></div>
       <form class="task-form" id="taskForm">
         <input class="input" id="taskTitle" type="text" maxlength="90" placeholder="새 작업 제목" required />
@@ -158,7 +160,7 @@
   <!-- ============ 공지 ============ -->
   <section class="panel-view" id="view-notice">
     <div class="notice-grid">
-      <div class="card">
+      <div class="card" data-accent="pink">
         <div class="card-head"><h2>공지 화이트보드</h2><span class="count" id="noticeCount">0</span></div>
         <form class="stack" id="noticeForm">
           <div class="row">
@@ -172,7 +174,7 @@
           <textarea class="input" id="noticeText" rows="3" maxlength="600" placeholder="오늘의 브리핑, 공지, 빠른 메모…" required></textarea>
         </form>
       </div>
-      <div class="card">
+      <div class="card" data-accent="teal">
         <div class="card-head"><h2>게시된 글</h2></div>
         <ul class="notice-list" id="noticeList"></ul>
       </div>
@@ -198,6 +200,8 @@
       <input class="input" id="joinName" type="text" maxlength="24" placeholder="예: 찐야수" required />
       <label class="field-label">자음 몸통</label>
       <div class="consonant-grid" id="consonantGrid"></div>
+      <label class="field-label">캐릭터 색 <span class="muted">(오피스에서 나를 구분하는 색)</span></label>
+      <div class="color-grid" id="colorGrid"></div>
       <label class="field-label" for="joinRole">역할 · 주인 메모</label>
       <input class="input" id="joinRole" type="text" maxlength="40" placeholder="예: 권은서님의 비서" />
       <label class="field-label" for="joinCode">초대 코드 <span class="muted">(선택)</span></label>

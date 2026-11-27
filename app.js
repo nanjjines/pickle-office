@@ -16,6 +16,10 @@ import {
   SPRITE_H,
   CONSONANTS,
   ZONES,
+  CHARACTER_COLORS,
+  CHARACTER_COLOR_ORDER,
+  STATUS_COLORS,
+  colorKeyFor,
   drawOfficeBase,
   drawCharacter,
   hitTest,
@@ -32,6 +36,15 @@ const STATUS_LIST = [
   { key: 'idle', label: '대기 중' },
   { key: 'away', label: '자리 비움' },
 ];
+
+/* 캐릭터 색: 저장된 값 → 찐야수는 핑크 → 자음 순서 기본값 */
+function memberColor(m) {
+  if (!m) return 'pink';
+  if (m.color && CHARACTER_COLORS[m.color]) return m.color;
+  if (m.name === '찐야수') return 'pink';
+  const idx = Math.max(0, CONSONANTS.indexOf(m.consonant));
+  return colorKeyFor(null, idx);
+}
 const STATUS_LABEL = Object.fromEntries(STATUS_LIST.map((s) => [s.key, s.label]));
 const COLUMNS = [
   { key: 'todo', label: '할 일' },
@@ -102,6 +115,7 @@ async function seedIfEmpty() {
     await set(ref(db, `office/members/${jj}`), {
       name: '찐야수',
       consonant: 'ㅈ',
+      color: 'pink',
       role: '권은서님의 비서',
       status: 'working',
       message: '오늘의 브리핑 정리 중',
@@ -201,6 +215,7 @@ function buildMapLabels() {
   for (const z of Object.values(ZONES)) {
     const el = document.createElement('span');
     el.className = 'map-tag';
+    el.dataset.zone = z.key;
     el.textContent = z.tag;
     el.style.left = `${(z.x / LOGICAL_W) * 100}%`;
     el.style.top = `${((z.y + 2) / LOGICAL_H) * 100}%`;
@@ -281,9 +296,11 @@ function drawLoop(t) {
       status: m.status || 'working',
       message: m.message || '',
       consonant: m.consonant || 'ㅇ',
+      color: memberColor(m),
     });
     drawCharacter(ctx, {
       consonant: m.consonant || 'ㅇ',
+      color: memberColor(m),
       x: a.x,
       y: a.y,
       status: m.status || 'working',
@@ -296,15 +313,23 @@ function drawLoop(t) {
 
   drawn.sort((p, q) => p.y - q.y);
 
-  // 이름표
+  // 이름표 (왼쪽 띠 = 상태 색)
   ctx.font = '10px "Galmuri11", monospace';
   ctx.textAlign = 'center';
   for (const d of drawn) {
-    ctx.fillStyle = 'rgba(247,243,233,0.8)';
-    const w = Math.max(24, ctx.measureText(d.name).width + 6);
-    ctx.fillRect(d.x + 15 - w / 2, d.y + SPRITE_H - 4, w, 11);
-    ctx.fillStyle = '#141210';
-    ctx.fillText(d.name, d.x + 15, d.y + SPRITE_H + 5);
+    const tw = ctx.measureText(d.name).width;
+    const w = Math.max(30, tw + 13);
+    const nx = Math.round(d.x + 15 - w / 2);
+    const ny = Math.round(d.y + SPRITE_H - 4);
+    ctx.fillStyle = '#FFFCF5';
+    ctx.fillRect(nx, ny, w, 13);
+    ctx.fillStyle = STATUS_COLORS[d.status] || '#16A34A';
+    ctx.fillRect(nx, ny, 3, 13);
+    ctx.strokeStyle = '#1B2130';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(nx + 0.5, ny + 0.5, w - 1, 12);
+    ctx.fillStyle = '#1B2130';
+    ctx.fillText(d.name, d.x + 16, ny + 9);
   }
 
   frameNo += 1;
@@ -321,7 +346,7 @@ function renderBubble() {
   if (!d) { bubble.hidden = true; return; }
   $('bubbleName').textContent = m.name;
   $('bubbleStatus').textContent = STATUS_LABEL[m.status] || '작업 중';
-  $('bubbleStatus').className = `chip s-${m.status === 'working' ? 'agreed' : 'discussing'}`;
+  $('bubbleStatus').className = `chip s-${m.status || 'working'}`;
   $('bubbleMsg').textContent = m.message || '상태 메시지 없음';
   const task = Object.values(store.tasks || {}).find(
     (t) => t.assignee === m.name && t.status !== 'done'
@@ -371,11 +396,12 @@ function renderMembers() {
   ul.innerHTML = list
     .map((m) => {
       const online = me && me.id === m.id ? true : m.lastSeen && Date.now() - Number(m.lastSeen) < 3 * 60e3;
-      return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''} ${online ? '' : 'is-offline'}" data-id="${esc(m.id)}">
+      const c = CHARACTER_COLORS[memberColor(m)];
+      return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''} ${online ? '' : 'is-offline'}" data-id="${esc(m.id)}" style="--mc:${c.base};--mc-soft:${c.light};--mc-deep:${c.deep}">
         <span class="ma">${esc(m.consonant || 'ㅇ')}</span>
         <span class="mi"><b>${esc(m.name)}</b>
         <span>${STATUS_LABEL[m.status] || '작업 중'}${m.message ? ' · ' + esc(m.message) : ''}</span></span>
-        <span class="dot ${esc(m.status || 'working')}"></span>
+        <span class="dot ${esc(m.status || 'working')}" title="${esc(STATUS_LABEL[m.status] || '작업 중')}"></span>
       </li>`;
     })
     .join('');
@@ -395,15 +421,48 @@ function renderMeCard() {
   $('meBody').hidden = !has;
   if (!has) return;
   const m = store.members[me.id];
-  $('meAvatar').textContent = m.consonant || 'ㅇ';
+  const c = CHARACTER_COLORS[memberColor(m)];
+  const av = $('meAvatar');
+  av.textContent = m.consonant || 'ㅇ';
+  av.style.background = c.light;
+  av.style.color = c.deep;
   $('meName').textContent = m.name || '';
   $('meRole').textContent = m.role || '역할 미지정';
   const grid = $('statusGrid');
   grid.querySelectorAll('.status-btn').forEach((b) => {
     b.classList.toggle('is-active', b.dataset.s === (m.status || 'working'));
   });
+  renderMyColors(m);
   const input = $('statusMsg');
   if (document.activeElement !== input) input.value = m.message || '';
+}
+
+/* ---------- 색 고르기 (입장 모달 · 내 자리) ---------- */
+function colorGridHTML(active, { labels = true } = {}) {
+  return CHARACTER_COLOR_ORDER.map((k) => {
+    const c = CHARACTER_COLORS[k];
+    return `<button type="button" class="cchip" data-color="${k}" aria-pressed="${k === active}"
+      title="${c.label}" style="--cc:${c.base};--cc-soft:${c.light};--cc-deep:${c.deep}">
+      <span class="sw"></span>${labels ? `<small>${c.label}</small>` : ''}</button>`;
+  }).join('');
+}
+
+function bindColorGrid(el, onPick) {
+  el.querySelectorAll('.cchip').forEach((b) => {
+    b.addEventListener('click', () => onPick(b.dataset.color));
+  });
+}
+
+function renderMyColors(m) {
+  const grid = $('myColorGrid');
+  if (!grid) return;
+  const active = memberColor(m);
+  grid.innerHTML = colorGridHTML(active, { labels: false });
+  bindColorGrid(grid, async (k) => {
+    if (!me || !store.members[me.id]) return;
+    await update(ref(db, `office/members/${me.id}`), { color: k, lastSeen: Date.now() });
+    toast(`캐릭터 색을 ${CHARACTER_COLORS[k].label}로 바꿨습니다`);
+  });
 }
 
 function renderLegend() {
@@ -423,7 +482,7 @@ function renderAgendas() {
     ul.innerHTML = list
       .map((a) => {
         const msgs = countAuthored(a.messages);
-        return `<li class="agenda-item ${selectedAgenda === a.id ? 'is-selected' : ''}" data-id="${esc(a.id)}">
+        return `<li class="agenda-item ${selectedAgenda === a.id ? 'is-selected' : ''}" data-id="${esc(a.id)}" data-status="${a.status === 'agreed' ? 'agreed' : 'discussing'}">
           <div class="at"><b>${esc(a.title)}</b>
           <span class="chip ${a.status === 'agreed' ? 's-agreed' : 's-discussing'}">${a.status === 'agreed' ? '합의 완료' : '논의 중'}</span></div>
           <p>${esc(a.author || '익명')} · 댓글 ${msgs} · ${relTime(a.createdAt)}</p>
@@ -524,7 +583,7 @@ function taskCard(t) {
   const idx = COLUMNS.findIndex((c) => c.key === (t.status || 'todo'));
   const prev = idx > 0 ? COLUMNS[idx - 1].key : null;
   const next = idx < COLUMNS.length - 1 ? COLUMNS[idx + 1].key : null;
-  return `<article class="tcard">
+  return `<article class="tcard p-${esc(t.priority || 'normal')}">
     <p class="tt">${esc(t.title)}</p>
     <div class="tmeta">
       <span class="assign"><i>${esc(t.assigneeConsonant || '·')}</i>${esc(t.assignee || '미지정')}</span>
@@ -571,6 +630,8 @@ function switchTab(name) {
 
 /* ---------------- 입장 ---------------- */
 let pickConsonant = 'ㅈ';
+let pickColor = 'pink';
+let pickColorTouched = false;
 
 function buildConsonantGrid() {
   const grid = $('consonantGrid');
@@ -585,7 +646,27 @@ function buildConsonantGrid() {
   });
 }
 
+function buildColorGrid() {
+  const grid = $('colorGrid');
+  grid.innerHTML = colorGridHTML(pickColor);
+  bindColorGrid(grid, (k) => {
+    pickColor = k;
+    pickColorTouched = true;
+    buildColorGrid();
+  });
+}
+
+/* 아직 고르지 않았다면 비어 있는 색을 먼저 권합니다 */
+function suggestColor() {
+  if (pickColorTouched) return;
+  const used = memberList().map((m) => memberColor(m));
+  const free = CHARACTER_COLOR_ORDER.find((k) => !used.includes(k));
+  pickColor = free || CHARACTER_COLOR_ORDER[0];
+}
+
 function openJoin() {
+  suggestColor();
+  buildColorGrid();
   $('joinModal').hidden = false;
   localStorage.setItem('pickle-office:seen', '1');
   $('joinCode').value = roomCode || '';
@@ -608,17 +689,18 @@ async function joinSubmit(e) {
   await set(ref(db, `office/members/${id}`), {
     name,
     consonant: pickConsonant,
+    color: pickColor,
     role: role || '역할 미지정',
     status: 'working',
     message: '',
     joinedAt: now,
     lastSeen: now,
   });
-  me = { id, name, consonant: pickConsonant };
+  me = { id, name, consonant: pickConsonant, color: pickColor };
   localStorage.setItem(LS_ME, JSON.stringify(me));
   $('joinModal').hidden = true;
   selectedMember = id;
-  toast(`${name} (${pickConsonant}) 입장 완료`);
+  toast(`${name} (${pickConsonant}) 입장 완료 · ${CHARACTER_COLORS[pickColor].label}`);
   registerPresence();
   switchTab('office');
 }
@@ -821,6 +903,7 @@ function bindEvents() {
 /* ---------------- 시작 ---------------- */
 function boot() {
   buildConsonantGrid();
+  buildColorGrid();
   renderLegend();
   buildMapLabels();
   bindEvents();
