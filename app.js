@@ -379,11 +379,19 @@ function renderBubble() {
   // 카드 제목을 가리지 않도록 맨 위 즐기 캐릭터는 말풍선을 아래로 내립니다
   const below = d.y < 70;
   bubble.classList.toggle('below', below);
-  bubble.style.left = `${((d.x + 15) / LOGICAL_W) * 100}%`;
+  bubble.hidden = false;
+  // 캐릭터가 맵 가장자리에 있어도 말풍선이 잘리지 않도록 가로 위치를 보정합니다
+  const wrapEl = $('mapWrap');
+  const wrapW = wrapEl ? wrapEl.clientWidth : 0;
+  let cx = ((d.x + SPRITE_W / 2) / LOGICAL_W) * wrapW;
+  const half = bubble.offsetWidth / 2;
+  if (wrapW && bubble.offsetWidth < wrapW) {
+    cx = Math.min(Math.max(cx, half + 3), wrapW - half - 3);
+  }
+  bubble.style.left = `${(cx / (wrapW || LOGICAL_W)) * 100}%`;
   bubble.style.top = below
     ? `${((d.y + SPRITE_H + 6) / LOGICAL_H) * 100}%`
     : `${((d.y - 2) / LOGICAL_H) * 100}%`;
-  bubble.hidden = false;
 }
 
 canvas.addEventListener('click', (e) => {
