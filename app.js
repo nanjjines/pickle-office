@@ -211,6 +211,7 @@ function buildMapLabels() {
 function memberList() {
   return Object.entries(store.members)
     .map(([id, m]) => ({ id, ...m }))
+    .filter((m) => m && m.name)
     .sort((a, b) => Number(a.joinedAt || 0) - Number(b.joinedAt || 0));
 }
 
@@ -242,6 +243,7 @@ function afterMembersChange() {
   renderBubble();
 }
 
+let frameNo = 0;
 function drawLoop(t) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(baseCanvas, 0, 0);
@@ -305,6 +307,9 @@ function drawLoop(t) {
     ctx.fillText(d.name, d.x + 15, d.y + SPRITE_H + 5);
   }
 
+  frameNo += 1;
+  if (selectedMember && frameNo % 6 === 0) renderBubble();
+
   requestAnimationFrame(drawLoop);
 }
 
@@ -338,6 +343,17 @@ canvas.addEventListener('click', (e) => {
   const lx = ((e.clientX - rect.left) / rect.width) * LOGICAL_W;
   const ly = ((e.clientY - rect.top) / rect.height) * LOGICAL_H;
   const id = hitTest(drawn, lx, ly);
+  if (!id) {
+    // 빈 구역을 누르면 해당 탭으로 이동
+    const zoneTab = { desk: 'work', meeting: 'meeting', board: 'notice' };
+    for (const [key, tab] of Object.entries(zoneTab)) {
+      const z = ZONES[key];
+      if (lx >= z.x && lx <= z.x + z.w && ly >= z.y && ly <= z.y + z.h) {
+        switchTab(tab);
+        return;
+      }
+    }
+  }
   selectedMember = id && id !== selectedMember ? id : null;
   renderMembers();
   renderBubble();
@@ -355,9 +371,9 @@ function renderMembers() {
   ul.innerHTML = list
     .map((m) => {
       const online = me && me.id === m.id ? true : m.lastSeen && Date.now() - Number(m.lastSeen) < 3 * 60e3;
-      return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''}" data-id="${esc(m.id)}">
+      return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''} ${online ? '' : 'is-offline'}" data-id="${esc(m.id)}">
         <span class="ma">${esc(m.consonant || 'ㅇ')}</span>
-        <span class="mi"><b>${esc(m.name)}${online ? '' : ' <span class="muted">· 오프라인</span>'}</b>
+        <span class="mi"><b>${esc(m.name)}</b>
         <span>${STATUS_LABEL[m.status] || '작업 중'}${m.message ? ' · ' + esc(m.message) : ''}</span></span>
         <span class="dot ${esc(m.status || 'working')}"></span>
       </li>`;
@@ -393,7 +409,7 @@ function renderMeCard() {
 function renderLegend() {
   $('legend').innerHTML = STATUS_LIST.map(
     (s) => `<span><i class="${s.key}"></i>${s.label}</span>`
-  ).join('') + '<span>· 캐릭터를 누르면 상세가 열립니다</span>';
+  ).join('') + '<span>· 캐릭터를 누르면 상세, 구역을 누르면 해당 탭으로 이동합니다</span>';
 }
 
 /* ---------------- 회의실 ---------------- */
@@ -571,6 +587,7 @@ function buildConsonantGrid() {
 
 function openJoin() {
   $('joinModal').hidden = false;
+  localStorage.setItem('pickle-office:seen', '1');
   $('joinCode').value = roomCode || '';
   setTimeout(() => $('joinName').focus(), 50);
 }
@@ -607,13 +624,26 @@ async function joinSubmit(e) {
 }
 
 let presenceTimer = null;
+function touchPresence() {
+  if (!me) return;
+  // 자리가 이미 사라졌으면 다시 만들지 않는다 (트랜잭션이 중단됨)
+  runTransaction(ref(db, `office/members/${me.id}`), (cur) => {
+    if (!cur) return undefined;
+    return { ...cur, lastSeen: Date.now() };
+  }).catch(() => {});
+}
 function registerPresence() {
   if (!me) return;
   if (presenceTimer) clearInterval(presenceTimer);
-  const r = ref(db, `office/members/${me.id}`);
-  update(r, { lastSeen: Date.now() }).catch(() => {});
+  touchPresence();
   presenceTimer = setInterval(() => {
-    if (me) update(ref(db, `office/members/${me.id}`), { lastSeen: Date.now() }).catch(() => {});
+    if (!me) return;
+    if (!store.members[me.id]) {
+      clearInterval(presenceTimer);
+      presenceTimer = null;
+      return;
+    }
+    touchPresence();
   }, 40e3);
 }
 
@@ -632,6 +662,7 @@ async function leaveSeat() {
   if (!confirm('이 자리에서 나가시겠습니까? 캐릭터가 오피스에서 사라집니다.')) return;
   await remove(ref(db, `office/members/${me.id}`));
   localStorage.removeItem(LS_ME);
+  if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
   me = null;
   selectedMember = null;
   $('bubble').hidden = true;
@@ -647,8 +678,8 @@ function bindEvents() {
 
   $('joinBtn').addEventListener('click', openJoin);
   $('joinBtn2').addEventListener('click', openJoin);
-  $('joinClose').addEventListener('click', () => { $('joinModal').hidden = true; });
-  $('joinCancel').addEventListener('click', () => { $('joinModal').hidden = true; });
+  $('joinClose').addEventListener('click', () => { $('joinModal').hidden = true; localStorage.setItem('pickle-office:seen', '1'); });
+  $('joinCancel').addEventListener('click', () => { $('joinModal').hidden = true; localStorage.setItem('pickle-office:seen', '1'); });
   $('joinForm').addEventListener('submit', joinSubmit);
   $('leaveBtn').addEventListener('click', leaveSeat);
 
@@ -668,14 +699,14 @@ function bindEvents() {
   ).join('');
   grid.querySelectorAll('.status-btn').forEach((b) => {
     b.addEventListener('click', async () => {
-      if (!me) { openJoin(); return; }
+      if (!me || !store.members[me.id]) { openJoin(); return; }
       await update(ref(db, `office/members/${me.id}`), { status: b.dataset.s, lastSeen: Date.now() });
     });
   });
 
   let msgTimer = null;
   $('statusMsg').addEventListener('input', (e) => {
-    if (!me) return;
+    if (!me || !store.members[me.id]) return;
     clearTimeout(msgTimer);
     const val = e.target.value;
     msgTimer = setTimeout(() => {
@@ -808,12 +839,20 @@ function boot() {
   subscribe();
   requestAnimationFrame(drawLoop);
   seedIfEmpty().then(() => {
-    if (me && store.members[me.id]) {
-      registerPresence();
-      selectedMember = me.id;
-    } else if (!me) {
-      setTimeout(() => { if (!$('joinModal').hidden) return; openJoin(); }, 1400);
-    }
+    setTimeout(() => {
+      if (me && store.members[me.id]) {
+        registerPresence();
+        selectedMember = me.id;
+      } else {
+        if (me) {
+          me = null;
+          localStorage.removeItem(LS_ME);
+        }
+        if (!$('joinModal').hidden) return;
+        if (localStorage.getItem('pickle-office:seen') === '1') return;
+        openJoin();
+      }
+    }, 1600);
   });
 }
 

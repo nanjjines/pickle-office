@@ -26,20 +26,20 @@ export const CONSONANTS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ
 
 /* 자음 몸통: 7x7 격자. 눈·입은 글자마다 빈 자리에 맞춰 지정합니다. */
 const LETTERS = {
-  'ㄱ': { g: ['#######', '......#', '......#', '......#', '......#', '......#', '......#'], eyes: [[1, 2], [4, 2]], mouth: [2, 4] },
+  'ㄱ': { g: ['#######', '......#', '......#', '......#', '......#', '......#', '......#'], eyes: [[2, 2], [4, 2]], mouth: [3, 4] },
   'ㄴ': { g: ['#......', '#......', '#......', '#......', '#......', '#......', '#######'], eyes: [[2, 1], [4, 1]], mouth: [3, 3] },
   'ㄷ': { g: ['#######', '#......', '#......', '#......', '#......', '#......', '#######'], eyes: [[2, 1], [4, 1]], mouth: [3, 3] },
-  'ㄹ': { g: ['#######', '......#', '#######', '#......', '#......', '#......', '#######'], eyes: [[1, 1], [4, 1]], mouth: [2, 4] },
-  'ㅁ': { g: ['.#####.', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '.#####.'], eyes: [[1, 2], [4, 2]], mouth: [2, 4] },
-  'ㅂ': { g: ['#.....#', '#.....#', '#######', '#.....#', '#.....#', '#.....#', '#.....#'], eyes: [[1, 1], [4, 1]], mouth: [2, 4] },
-  'ㅅ': { g: ['...#...', '..#....', '..#.#..', '.#...#.', '.#...#.', '#.....#', '#.....#'], eyes: [[1, 2], [5, 2]], mouth: [2, 4] },
-  'ㅇ': { g: ['.#####.', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '.#####.'], eyes: [[1, 2], [4, 2]], mouth: [2, 4] },
-  'ㅈ': { g: ['#######', '....#..', '...#...', '..#....', '.#.....', '.#.....', '#......'], eyes: [[1, 2], [5, 2]], mouth: [2, 4] },
-  'ㅊ': { g: ['...#...', '#######', '....#..', '...#...', '..#....', '.#.....', '#......'], eyes: [[1, 3], [5, 3]], mouth: [2, 5] },
-  'ㅋ': { g: ['#######', '.....#.', '.....#.', '.....#.', '#######', '.....#.', '.....#.'], eyes: [[1, 1], [4, 1]], mouth: [2, 5] },
+  'ㄹ': { g: ['#######', '......#', '#######', '#......', '#......', '#......', '#######'], eyes: [[2, 3], [4, 3]], mouth: [3, 5] },
+  'ㅁ': { g: ['.#####.', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '.#####.'], eyes: [[2, 2], [4, 2]], mouth: [3, 4] },
+  'ㅂ': { g: ['#.....#', '#.....#', '#######', '#.....#', '#.....#', '#.....#', '#.....#'], eyes: [[2, 1], [4, 1]], mouth: [3, 4] },
+  'ㅅ': { g: ['...#...', '..#....', '..#.#..', '.#...#.', '.#...#.', '#.....#', '#.....#'], eyes: [[2, 3], [4, 3]], mouth: [2, 5] },
+  'ㅇ': { g: ['.#####.', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '.#####.'], eyes: [[2, 2], [4, 2]], mouth: [3, 4] },
+  'ㅈ': { g: ['#######', '....#..', '...#...', '..#....', '.#.....', '.#.....', '#......'], eyes: [[1, 3], [4, 3]], mouth: [2, 4] },
+  'ㅊ': { g: ['...#...', '#######', '....#..', '...#...', '..#....', '.#.....', '#......'], eyes: [[1, 3], [5, 3]], mouth: [3, 5] },
+  'ㅋ': { g: ['#######', '.....#.', '.....#.', '.....#.', '#######', '.....#.', '.....#.'], eyes: [[1, 2], [4, 2]], mouth: [2, 3] },
   'ㅌ': { g: ['#######', '#......', '#######', '#......', '#######', '#......', '#######'], eyes: [[2, 1], [4, 1]], mouth: [2, 3] },
-  'ㅍ': { g: ['#.....#', '#.....#', '#######', '#.....#', '#.....#', '#######', '...#...'], eyes: [[1, 1], [4, 1]], mouth: [2, 4] },
-  'ㅎ': { g: ['..###..', '....#..', '...#...', '#######', '.#...#.', '#.....#', '#.....#'], eyes: [[1, 2], [5, 2]], mouth: [2, 4] },
+  'ㅍ': { g: ['#.....#', '#.....#', '#######', '#.....#', '#.....#', '#######', '...#...'], eyes: [[2, 1], [4, 1]], mouth: [2, 3] },
+  'ㅎ': { g: ['..###..', '....#..', '...#...', '#######', '.#...#.', '#.....#', '#.....#'], eyes: [[1, 2], [5, 2]], mouth: [3, 4] },
 };
 
 export const ZONES = {
@@ -124,21 +124,22 @@ export function drawOfficeBase(ctx) {
 
 function drawDesks(ctx) {
   for (const [sx, sy] of SLOTS.desk) {
-    // 책상
-    px(ctx, sx - 6, sy + 24, 42, 10, PALETTE.paper2);
-    frame(ctx, sx - 6, sy + 24, 42, 10, PALETTE.ink, 2);
-    px(ctx, sx + 2, sy + 27, 26, 2, PALETTE.line);
+    // 캐릭터 옆 책상(모니터 + 서류)
+    const dx = sx + 30;
+    const dy = sy + 16;
+    px(ctx, dx, dy + 8, 20, 9, PALETTE.paper2);
+    frame(ctx, dx, dy + 8, 20, 9, PALETTE.ink, 2);
+    px(ctx, dx + 2, dy + 11, 16, 2, PALETTE.line);
     // 모니터
-    px(ctx, sx + 6, sy + 12, 18, 12, PALETTE.ink);
-    px(ctx, sx + 8, sy + 14, 14, 8, PALETTE.paper);
-    px(ctx, sx + 9, sy + 15, 12, 1, PALETTE.gray2);
-    px(ctx, sx + 9, sy + 17, 8, 1, PALETTE.gray2);
-    px(ctx, sx + 9, sy + 19, 10, 1, PALETTE.gray2);
-    // 받침
-    px(ctx, sx + 13, sy + 24, 4, 2, PALETTE.gray);
-    // 서류 더미
-    px(ctx, sx + 26, sy + 27, 7, 4, PALETTE.light);
-    frame(ctx, sx + 26, sy + 27, 7, 4, PALETTE.gray2, 1);
+    px(ctx, dx + 3, dy, 14, 9, PALETTE.ink);
+    px(ctx, dx + 4, dy + 1, 12, 6, PALETTE.paper);
+    px(ctx, dx + 5, dy + 2, 8, 1, PALETTE.gray2);
+    px(ctx, dx + 5, dy + 4, 10, 1, PALETTE.gray2);
+    // 서류
+    px(ctx, dx + 13, dy + 12, 6, 4, PALETTE.light);
+    frame(ctx, dx + 13, dy + 12, 6, 4, PALETTE.gray2, 1);
+    // 발밑 러그
+    px(ctx, sx + 2, sy + 30, 26, 2, PALETTE.line);
   }
 }
 
@@ -146,22 +147,36 @@ function drawMeeting(ctx) {
   // 회의 테이블
   px(ctx, 292, 74, 148, 38, PALETTE.paper2);
   frame(ctx, 292, 74, 148, 38, PALETTE.ink, 2);
-  px(ctx, 296, 78, 140, 4, PALETTE.line);
+  px(ctx, 296, 78, 140, 3, PALETTE.line);
   // 다리
   px(ctx, 296, 112, 4, 4, PALETTE.ink);
   px(ctx, 432, 112, 4, 4, PALETTE.ink);
-  // 의자
-  for (const [sx] of SLOTS.meeting.slice(0, 3)) {
-    px(ctx, sx + 4, 84, 22, 6, PALETTE.paper);
-    frame(ctx, sx + 4, 84, 22, 6, PALETTE.gray, 1);
-  }
-  for (const [sx] of SLOTS.meeting.slice(3, 6)) {
-    px(ctx, sx + 4, 92, 22, 6, PALETTE.paper);
-    frame(ctx, sx + 4, 92, 22, 6, PALETTE.gray, 1);
-  }
-  // 화이트보드(회의실 벽면)
+  // 좌석 벤치
+  px(ctx, 296, 68, 140, 4, PALETTE.gray2);
+  px(ctx, 296, 114, 140, 4, PALETTE.gray2);
+  // 컵과 서류
+  px(ctx, 336, 84, 5, 5, PALETTE.light);
+  frame(ctx, 336, 84, 5, 5, PALETTE.gray2, 1);
+  px(ctx, 396, 86, 5, 5, PALETTE.light);
+  frame(ctx, 396, 86, 5, 5, PALETTE.gray2, 1);
+  px(ctx, 356, 88, 14, 8, PALETTE.light);
+  frame(ctx, 356, 88, 14, 8, PALETTE.gray2, 1);
+  // 벽면 화이트보드
   px(ctx, 240, 34, 26, 18, PALETTE.light);
   frame(ctx, 240, 34, 26, 18, PALETTE.gray, 2);
+  px(ctx, 244, 39, 14, 1, PALETTE.gray2);
+  px(ctx, 244, 43, 10, 1, PALETTE.gray2);
+  // 벽시계
+  px(ctx, 428, 34, 12, 12, PALETTE.light);
+  frame(ctx, 428, 34, 12, 12, PALETTE.gray, 2);
+  px(ctx, 433, 37, 1, 4, PALETTE.ink);
+  px(ctx, 434, 40, 3, 1, PALETTE.ink);
+  // 화분
+  px(ctx, 244, 122, 10, 8, PALETTE.paper2);
+  frame(ctx, 244, 122, 10, 8, PALETTE.ink, 1);
+  px(ctx, 247, 116, 3, 7, PALETTE.gray);
+  px(ctx, 243, 119, 5, 2, PALETTE.gray2);
+  px(ctx, 250, 117, 5, 2, PALETTE.gray2);
 }
 
 function drawLounge(ctx) {
@@ -169,29 +184,39 @@ function drawLounge(ctx) {
   px(ctx, 22, 164, 188, 108, PALETTE.paper);
   px(ctx, 24, 166, 184, 104, PALETTE.floor2);
   frame(ctx, 24, 166, 184, 104, PALETTE.line, 2);
+  px(ctx, 28, 170, 176, 2, PALETTE.line);
+  px(ctx, 28, 264, 176, 2, PALETTE.line);
   // 소파
-  px(ctx, 138, 244, 74, 20, PALETTE.paper2);
-  frame(ctx, 138, 244, 74, 20, PALETTE.ink, 2);
-  px(ctx, 142, 250, 30, 10, PALETTE.paper);
-  px(ctx, 178, 250, 30, 10, PALETTE.paper);
-  px(ctx, 138, 240, 74, 5, PALETTE.gray2);
+  px(ctx, 120, 248, 72, 18, PALETTE.paper2);
+  frame(ctx, 120, 248, 72, 18, PALETTE.ink, 2);
+  px(ctx, 124, 252, 28, 10, PALETTE.paper);
+  px(ctx, 158, 252, 28, 10, PALETTE.paper);
+  frame(ctx, 124, 252, 28, 10, PALETTE.gray2, 1);
+  frame(ctx, 158, 252, 28, 10, PALETTE.gray2, 1);
+  px(ctx, 118, 244, 76, 5, PALETTE.gray2);
   // 탁자
-  px(ctx, 116, 208, 34, 16, PALETTE.paper2);
-  frame(ctx, 116, 208, 34, 16, PALETTE.ink, 2);
-  px(ctx, 122, 213, 8, 6, PALETTE.light);
-  frame(ctx, 122, 213, 8, 6, PALETTE.gray2, 1);
+  px(ctx, 96, 214, 28, 14, PALETTE.paper2);
+  frame(ctx, 96, 214, 28, 14, PALETTE.ink, 2);
+  px(ctx, 100, 217, 8, 6, PALETTE.light);
+  frame(ctx, 100, 217, 8, 6, PALETTE.gray2, 1);
+  px(ctx, 114, 218, 6, 7, PALETTE.light);
+  frame(ctx, 114, 218, 6, 7, PALETTE.gray2, 1);
   // 화분
-  px(ctx, 198, 172, 12, 10, PALETTE.paper2);
-  frame(ctx, 198, 172, 12, 10, PALETTE.ink, 1);
-  px(ctx, 202, 164, 4, 8, PALETTE.gray);
-  px(ctx, 198, 168, 6, 3, PALETTE.gray2);
-  px(ctx, 206, 166, 6, 3, PALETTE.gray2);
+  px(ctx, 196, 172, 12, 10, PALETTE.paper2);
+  frame(ctx, 196, 172, 12, 10, PALETTE.ink, 1);
+  px(ctx, 200, 164, 4, 8, PALETTE.gray);
+  px(ctx, 196, 168, 6, 3, PALETTE.gray2);
+  px(ctx, 204, 166, 6, 3, PALETTE.gray2);
   // 커피 머신
-  px(ctx, 34, 250, 16, 18, PALETTE.paper2);
-  frame(ctx, 34, 250, 16, 18, PALETTE.ink, 2);
-  px(ctx, 38, 254, 8, 5, PALETTE.ink2);
-  px(ctx, 39, 262, 6, 4, PALETTE.light);
-  frame(ctx, 39, 262, 6, 4, PALETTE.gray, 1);
+  px(ctx, 198, 244, 14, 18, PALETTE.paper2);
+  frame(ctx, 198, 244, 14, 18, PALETTE.ink, 2);
+  px(ctx, 201, 247, 8, 5, PALETTE.ink2);
+  px(ctx, 202, 256, 6, 4, PALETTE.light);
+  frame(ctx, 202, 256, 6, 4, PALETTE.gray, 1);
+  // 스탠드
+  px(ctx, 30, 186, 2, 12, PALETTE.gray);
+  px(ctx, 26, 182, 10, 5, PALETTE.gray2);
+  px(ctx, 28, 198, 10, 2, PALETTE.ink2);
 }
 
 function drawBoard(ctx) {
@@ -246,10 +271,6 @@ export function drawCharacter(ctx, opts) {
   ctx.ellipse(x + SPRITE_W / 2, y + SPRITE_H - 2, 11, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 팔
-  px(ctx, gx - 4, gy + 9, 4, 3, ink);
-  px(ctx, gx + 21, gy + 9, 4, 3, ink);
-
   // 몸통(자음)
   letter.g.forEach((row, r) => {
     for (let c = 0; c < row.length; c++) {
@@ -291,10 +312,6 @@ export function drawCharacter(ctx, opts) {
     px(ctx, bx + cell * 2 + 2, by - 2, 3, 1, PALETTE.gray);
     px(ctx, bx + cell * 2 + 3, by - 5, 3, 1, PALETTE.gray);
   }
-
-  // 볼
-  px(ctx, gx + 1, gy + 14, 2, 2, PALETTE.line);
-  px(ctx, gx + 20, gy + 14, 2, 2, PALETTE.line);
 
   ctx.restore();
 
