@@ -317,6 +317,7 @@ function drawLoop(t) {
   ctx.font = '10px "Galmuri11", monospace';
   ctx.textAlign = 'center';
   for (const d of drawn) {
+    if (selectedMember === d.id) continue; // 말풍선이 이름을 대신합니다
     const tw = ctx.measureText(d.name).width;
     const w = Math.max(30, tw + 13);
     const nx = Math.round(d.x + 16 - w / 2);
