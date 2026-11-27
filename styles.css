@@ -404,6 +404,10 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
 .col-head h3 { margin: 0; font-size: 14px; display: inline-flex; align-items: center; gap: 7px; }
 .col-head h3::before { content: ''; width: 8px; height: 8px; background: #fff; opacity: .85; display: inline-block; }
 .col-head .count { background: #fff; color: var(--col-deep); border-color: var(--ink); }
+/* 완료는 ‘조용한’ 상태 — 어두운 띠 대신 연한 바탕 */
+.col[data-status="done"] .col-head { background: var(--col-soft); color: var(--col-deep); }
+.col[data-status="done"] .col-head h3::before { background: var(--col); opacity: 1; }
+.col[data-status="done"] .col-head .count { background: var(--col); color: #fff; }
 .col-body { padding: 9px; display: grid; gap: 8px; min-height: 150px; }
 .col[data-status="done"] .tcard { opacity: .92; }
 
