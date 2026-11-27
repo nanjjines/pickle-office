@@ -321,11 +321,11 @@ function drawLounge(ctx) {
   px(ctx, 205, 258, 3, 3, PALETTE.terraDeep);
 
   // 화분
-  px(ctx, 196, 172, 13, 11, PALETTE.terraMid);
-  frame(ctx, 196, 172, 13, 11, PALETTE.terraDeep, 1);
-  px(ctx, 200, 163, 5, 9, PALETTE.leaf);
-  px(ctx, 196, 167, 7, 3, PALETTE.leafDark);
-  px(ctx, 205, 165, 6, 3, PALETTE.leaf);
+  px(ctx, 196, 176, 13, 11, PALETTE.terraMid);
+  frame(ctx, 196, 176, 13, 11, PALETTE.terraDeep, 1);
+  px(ctx, 200, 167, 5, 9, PALETTE.leaf);
+  px(ctx, 196, 171, 7, 3, PALETTE.leafDark);
+  px(ctx, 205, 169, 6, 3, PALETTE.leaf);
 
   // 스탠드 조명 (앰버 불빛)
   px(ctx, 30, 186, 2, 12, PALETTE.gray);
@@ -395,9 +395,9 @@ export function drawCharacter(ctx, opts) {
   } = opts;
   const letter = LETTERS[consonant] || LETTERS['ㅇ'];
   const pal = CHARACTER_COLORS[color] || CHARACTER_COLORS.pink;
-  const cell = 3;
-  const gx = Math.round(x + 4);
-  const gy = Math.round(y + 3 + bob);
+  const cell = 4;
+  const gx = Math.round(x + 2);
+  const gy = Math.round(y + 2 + bob);
   const ink = PALETTE.ink;
 
   ctx.save();
@@ -424,19 +424,12 @@ export function drawCharacter(ctx, opts) {
   for (const [c, r] of cells) {
     px(ctx, gx + c * cell, gy + r * cell, cell, cell, pal.base);
   }
-  // 위쪽 하이라이트 / 아래쪽 그늘로 픽셀 입체감
-  const minR = Math.min(...cells.map(([, r]) => r));
-  const maxR = Math.max(...cells.map(([, r]) => r));
-  for (const [c, r] of cells) {
-    if (r === minR) px(ctx, gx + c * cell + 1, gy + r * cell, cell - 1, 1, pal.light);
-    if (r === maxR) px(ctx, gx + c * cell, gy + r * cell + cell - 1, cell, 1, pal.deep);
-  }
 
   // 다리
-  px(ctx, gx + 4, gy + 21, 3, 5, ink);
-  px(ctx, gx + 15, gy + 21, 3, 5, ink);
-  px(ctx, gx + 5, gy + 21, 1, 4, pal.base);
-  px(ctx, gx + 16, gy + 21, 1, 4, pal.base);
+  px(ctx, gx + 4, gy + 7 * cell, 4, 4, ink);
+  px(ctx, gx + 16, gy + 7 * cell, 4, 4, ink);
+  px(ctx, gx + 5, gy + 7 * cell, 2, 3, pal.base);
+  px(ctx, gx + 17, gy + 7 * cell, 2, 3, pal.base);
 
   // 눈
   const mood = MOODS[status] || MOODS.working;
