@@ -73,7 +73,7 @@
           </div>
           <div class="me-body" id="meBody" hidden>
             <div class="me-id">
-              <span class="mini-avatar" id="meAvatar">ㅈ</span>
+              <canvas class="mini-avatar" id="meAvatar" width="64" height="64" aria-hidden="true"></canvas>
               <div>
                 <b id="meName">—</b>
                 <p id="meRole">—</p>
@@ -194,11 +194,19 @@
       <h2 id="joinTitle">간편 입장</h2>
       <button class="icon-btn" id="joinClose" type="button" aria-label="닫기">✕</button>
     </div>
-    <p class="modal-desc">이름과 자음 하나만 정하면 바로 자리가 배정됩니다.</p>
+    <p class="modal-desc">이름과 이름표 자음, 색만 정하면 바로 자리가 배정됩니다.</p>
+    <div class="char-preview">
+      <canvas id="joinPreview" width="128" height="128" aria-hidden="true"></canvas>
+      <div class="char-preview-meta">
+        <b id="joinPreviewName">새 비서</b>
+        <p><span class="badge" id="joinPreviewBadge">ㅈ</span> 이름표 자음 · <span id="joinPreviewColor">핑크</span></p>
+        <small>머리 모양·머리색은 이름에 따라 정해집니다</small>
+      </div>
+    </div>
     <form class="stack" id="joinForm">
       <label class="field-label" for="joinName">이름</label>
       <input class="input" id="joinName" type="text" maxlength="24" placeholder="예: 찐야수" required />
-      <label class="field-label">자음 몸통</label>
+      <label class="field-label">이름표 자음 <span class="muted">(이름표·목록에 붙는 표식)</span></label>
       <div class="consonant-grid" id="consonantGrid"></div>
       <label class="field-label">캐릭터 색 <span class="muted">(오피스에서 나를 구분하는 색)</span></label>
       <div class="color-grid" id="colorGrid"></div>

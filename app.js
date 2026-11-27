@@ -22,6 +22,7 @@ import {
   colorKeyFor,
   drawOfficeBase,
   drawCharacter,
+  paintPortrait,
   hitTest,
   slotFor,
   zoneForStatus,
@@ -300,12 +301,15 @@ function drawLoop(t) {
     });
     drawCharacter(ctx, {
       consonant: m.consonant || 'ㅇ',
+      name: m.name || '',
       color: memberColor(m),
       x: a.x,
       y: a.y,
       status: m.status || 'working',
       blink,
       bob,
+      moving,
+      walk: t,
       selected: selectedMember === m.id,
       dim: m.status === 'away',
     });
@@ -313,14 +317,16 @@ function drawLoop(t) {
 
   drawn.sort((p, q) => p.y - q.y);
 
-  // 이름표 (왼쪽 띠 = 상태 색)
+  // 이름표 — 왼쪽 띠 = 상태 색, 앞글자 = 이름표 자음(캐릭터 색)
   ctx.font = '10px "Galmuri11", monospace';
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'left';
   for (const d of drawn) {
     if (selectedMember === d.id) continue; // 말풍선이 이름을 대신합니다
+    const pal = CHARACTER_COLORS[d.color] || CHARACTER_COLORS.pink;
+    const cw = ctx.measureText(d.consonant).width;
     const tw = ctx.measureText(d.name).width;
-    const w = Math.max(30, tw + 13);
-    const nx = Math.round(d.x + 16 - w / 2);
+    const w = Math.max(32, Math.round(cw + tw + 17));
+    const nx = Math.round(d.x + SPRITE_W / 2 - w / 2);
     const ny = Math.round(d.y + SPRITE_H + 1);
     ctx.fillStyle = '#FFFCF5';
     ctx.fillRect(nx, ny, w, 13);
@@ -329,8 +335,10 @@ function drawLoop(t) {
     ctx.strokeStyle = '#1B2130';
     ctx.lineWidth = 1;
     ctx.strokeRect(nx + 0.5, ny + 0.5, w - 1, 12);
+    ctx.fillStyle = pal.deep;
+    ctx.fillText(d.consonant, nx + 6, ny + 10);
     ctx.fillStyle = '#1B2130';
-    ctx.fillText(d.name, d.x + 16, ny + 9);
+    ctx.fillText(d.name, nx + 6 + cw + 3, ny + 10);
   }
 
   frameNo += 1;
@@ -404,13 +412,24 @@ function renderMembers() {
       const online = me && me.id === m.id ? true : m.lastSeen && Date.now() - Number(m.lastSeen) < 3 * 60e3;
       const c = CHARACTER_COLORS[memberColor(m)];
       return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''} ${online ? '' : 'is-offline'}" data-id="${esc(m.id)}" style="--mc:${c.base};--mc-soft:${c.light};--mc-deep:${c.deep}">
-        <span class="ma">${esc(m.consonant || 'ㅇ')}</span>
+        <canvas class="ma" width="32" height="32" data-id="${esc(m.id)}" aria-hidden="true"></canvas>
         <span class="mi"><b>${esc(m.name)}</b>
         <span>${STATUS_LABEL[m.status] || '작업 중'}${m.message ? ' · ' + esc(m.message) : ''}</span></span>
         <span class="dot ${esc(m.status || 'working')}" title="${esc(STATUS_LABEL[m.status] || '작업 중')}"></span>
       </li>`;
     })
     .join('');
+  ul.querySelectorAll('canvas.ma').forEach((cv) => {
+    const m = list.find((x) => x.id === cv.dataset.id);
+    if (!m) return;
+    paintPortrait(cv, {
+      scale: 2,
+      consonant: m.consonant || 'ㅇ',
+      name: m.name || '',
+      color: memberColor(m),
+      status: m.status || 'working',
+    });
+  });
   ul.querySelectorAll('.member-item').forEach((li) => {
     li.addEventListener('click', () => {
       selectedMember = li.dataset.id === selectedMember ? null : li.dataset.id;
@@ -427,11 +446,14 @@ function renderMeCard() {
   $('meBody').hidden = !has;
   if (!has) return;
   const m = store.members[me.id];
-  const c = CHARACTER_COLORS[memberColor(m)];
   const av = $('meAvatar');
-  av.textContent = m.consonant || 'ㅇ';
-  av.style.background = c.light;
-  av.style.color = c.deep;
+  paintPortrait(av, {
+    scale: 2,
+    consonant: m.consonant || 'ㅇ',
+    name: m.name || '',
+    color: memberColor(m),
+    status: m.status || 'working',
+  });
   $('meName').textContent = m.name || '';
   $('meRole').textContent = m.role || '역할 미지정';
   const grid = $('statusGrid');
@@ -648,6 +670,7 @@ function buildConsonantGrid() {
     b.addEventListener('click', () => {
       pickConsonant = b.dataset.c;
       grid.querySelectorAll('.cbtn').forEach((x) => x.classList.toggle('is-active', x === b));
+      renderJoinPreview();
     });
   });
 }
@@ -659,7 +682,29 @@ function buildColorGrid() {
     pickColor = k;
     pickColorTouched = true;
     buildColorGrid();
+    renderJoinPreview();
   });
+}
+
+/* 입장 모달 미리보기 — 고른 이름·자음·색 그대로 캐릭터가 보입니다 */
+function renderJoinPreview() {
+  const canvas = $('joinPreview');
+  if (!canvas) return;
+  const nameInput = $('joinName');
+  const name = nameInput ? nameInput.value.trim() : '';
+  paintPortrait(canvas, {
+    scale: 4,
+    consonant: pickConsonant,
+    name: name || '새 비서',
+    color: pickColor,
+    status: 'idle',
+  });
+  $('joinPreviewName').textContent = name || '새 비서';
+  const badge = $('joinPreviewBadge');
+  badge.textContent = pickConsonant;
+  badge.style.color = CHARACTER_COLORS[pickColor].deep;
+  badge.style.background = CHARACTER_COLORS[pickColor].light;
+  $('joinPreviewColor').textContent = CHARACTER_COLORS[pickColor].label;
 }
 
 /* 아직 고르지 않았다면 비어 있는 색을 먼저 권합니다 */
@@ -673,6 +718,7 @@ function suggestColor() {
 function openJoin() {
   suggestColor();
   buildColorGrid();
+  renderJoinPreview();
   $('joinModal').hidden = false;
   localStorage.setItem('pickle-office:seen', '1');
   $('joinCode').value = roomCode || '';
@@ -769,6 +815,7 @@ function bindEvents() {
   $('joinClose').addEventListener('click', () => { $('joinModal').hidden = true; localStorage.setItem('pickle-office:seen', '1'); });
   $('joinCancel').addEventListener('click', () => { $('joinModal').hidden = true; localStorage.setItem('pickle-office:seen', '1'); });
   $('joinForm').addEventListener('submit', joinSubmit);
+  $('joinName').addEventListener('input', renderJoinPreview);
   $('leaveBtn').addEventListener('click', leaveSeat);
 
   $('shareBtn').addEventListener('click', async () => {

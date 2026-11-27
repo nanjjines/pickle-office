@@ -10,8 +10,8 @@ export const LOGICAL_W = 480;
 export const LOGICAL_H = 290;
 export const SCALE = 2;
 
-export const SPRITE_W = 30;
-export const SPRITE_H = 36;
+export const SPRITE_W = 32;
+export const SPRITE_H = 34;
 
 export const PALETTE = {
   ink: '#1B2130',
@@ -85,24 +85,6 @@ export function colorKeyFor(color, fallbackIndex = 0) {
 }
 
 export const CONSONANTS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
-
-/* 자음 몸통: 7x7 격자. 눈·입은 글자마다 빈 자리에 맞춰 지정합니다. */
-const LETTERS = {
-  'ㄱ': { g: ['#######', '......#', '......#', '......#', '......#', '......#', '......#'], eyes: [[2, 2], [4, 2]], mouth: [3, 4] },
-  'ㄴ': { g: ['#......', '#......', '#......', '#......', '#......', '#......', '#######'], eyes: [[2, 1], [4, 1]], mouth: [3, 3] },
-  'ㄷ': { g: ['#######', '#......', '#......', '#......', '#......', '#......', '#######'], eyes: [[2, 1], [4, 1]], mouth: [3, 3] },
-  'ㄹ': { g: ['#######', '......#', '#######', '#......', '#......', '#......', '#######'], eyes: [[2, 3], [4, 3]], mouth: [3, 5] },
-  'ㅁ': { g: ['.#####.', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '.#####.'], eyes: [[2, 2], [4, 2]], mouth: [3, 4] },
-  'ㅂ': { g: ['#.....#', '#.....#', '#######', '#.....#', '#.....#', '#.....#', '#.....#'], eyes: [[2, 1], [4, 1]], mouth: [3, 4] },
-  'ㅅ': { g: ['...#...', '..#....', '..#.#..', '.#...#.', '.#...#.', '#.....#', '#.....#'], eyes: [[2, 3], [4, 3]], mouth: [2, 5] },
-  'ㅇ': { g: ['.#####.', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '.#####.'], eyes: [[2, 2], [4, 2]], mouth: [3, 4] },
-  'ㅈ': { g: ['#######', '....#..', '...#...', '..#....', '.#.....', '.#.....', '#......'], eyes: [[1, 3], [4, 3]], mouth: [2, 4] },
-  'ㅊ': { g: ['...#...', '#######', '....#..', '...#...', '..#....', '.#.....', '#......'], eyes: [[1, 3], [5, 3]], mouth: [3, 5] },
-  'ㅋ': { g: ['#######', '.....#.', '.....#.', '.....#.', '#######', '.....#.', '.....#.'], eyes: [[1, 2], [4, 2]], mouth: [2, 3] },
-  'ㅌ': { g: ['#######', '#......', '#######', '#......', '#######', '#......', '#######'], eyes: [[2, 1], [4, 1]], mouth: [2, 3] },
-  'ㅍ': { g: ['#.....#', '#.....#', '#######', '#.....#', '#.....#', '#######', '...#...'], eyes: [[2, 1], [4, 1]], mouth: [2, 3] },
-  'ㅎ': { g: ['..###..', '....#..', '...#...', '#######', '.#...#.', '#.....#', '#.....#'], eyes: [[1, 2], [5, 2]], mouth: [3, 4] },
-};
 
 export const ZONES = {
   desk: { x: 12, y: 28, w: 208, h: 114, tag: '데스크 · 작업 존', key: 'desk' },
@@ -380,88 +362,201 @@ function drawBoard(ctx) {
   px(ctx, 286, 266, 3, 4, PALETTE.pink);
 }
 
-/* ---------- 캐릭터 ---------- */
+/* ---------- 캐릭터: 1:1 사람 픽셀 스프라이트 ----------
+ * 16 x 16칸 격자, 한 칸 = U(2 논리 픽셀) → 32 x 32 논리 픽셀.
+ * 머리 y0~y7 (8칸 = 16px) · 몸통+다리 y8~y15 (8칸 = 16px) → 머리 : 몸 = 1 : 1.
+ * 이름(없으면 이름표 자음)에서 머리 모양·머리색을 정해 사람마다 조금씩 다르게 보입니다.
+ *
+ * 격자 기호: . 투명 · K 잉크테두리 · h 어두운 머리 · H 머리 광택 · s 피부 · S 피부 그늘
+ *            w 흰색(깃) · o 옷 · d 옷 진한색(깃 매듭·팔 구분) · n 바지 · k 신발
+ */
+const U = 2;
+const CELLS_W = 16;
+const CELLS_H = 16;
+export const PORTRAIT_W = CELLS_W * U;  // 32
+export const PORTRAIT_H = CELLS_H * U;  // 32
+
+const SKIN = '#FFE2C2';
+const SKIN_SHADE = '#F2BE94';
+const WHITE = '#FFFDF7';
+const BLUSH = '#F79FB4';
+const MOUTH_IN = '#D9697C';
+const PANTS = '#4A5474';
+const SHOE = '#252C40';
+
+/* 머리카락: 어두운 톤 + 밝은 광택 */
+const HAIR_TONES = [
+  { d: '#3B2E45', l: '#6C5482' },
+  { d: '#2C3348', l: '#57638C' },
+  { d: '#473128', l: '#7C5741' },
+  { d: '#2D3A34', l: '#5C7663' },
+  { d: '#3C2C35', l: '#705264' },
+];
+
+/* 뼈대 — 얼굴(눈·입)과 다리는 그 위에 따로 그립니다 */
+const CHAR_GRID = [
+  '...hhhhhhhhhh...',
+  '..hhHHhhhhhhhh..',
+  '..hhhhhhhhhhhh..',
+  '..KssssssssssK..',
+  '..KssssssssssK..',
+  '..KssssssssssK..',
+  '..KssssssssssK..',
+  '...KKKKSSKKKK...',
+  '...KKKKKKKKKK...',
+  '...oKoowwooKo...',
+  '...oKooddooKo...',
+  '...sKooooooKs...',
+  '....KKKKKKKK....',
+  '.....nn..nn.....',
+  '.....nn..nn.....',
+  '....kkk..kkk....',
+];
+
 const MOODS = {
-  working: { mouth: 'flat' },
-  meeting: { mouth: 'open' },
-  idle: { mouth: 'smile' },
-  away: { mouth: 'sleep' },
+  working: { eyes: 'open', mouth: 'flat' },
+  meeting: { eyes: 'open', mouth: 'open', gesture: true },
+  idle: { eyes: 'open', mouth: 'smile' },
+  away: { eyes: 'closed', mouth: 'small', sleep: true },
 };
+
+function hashOf(s) {
+  let h = 2166136261;
+  const str = String(s || '');
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return Math.abs(h);
+}
+
+/* 머리 4종: 0 단발 · 1 짧은 머리 · 2 옆 묶음 · 3 양갈래 */
+function drawHairStyle(paint, style, tone, accent) {
+  const h = tone.d;
+  if (style === 0) {
+    paint(2, 3, h); paint(2, 4, h);
+    paint(13, 3, h); paint(13, 4, h);
+  } else if (style === 1) {
+    paint(2, 3, h);
+    paint(13, 3, h);
+  } else if (style === 2) {
+    paint(2, 3, h);
+    paint(13, 3, h);
+    paint(14, 2, accent);            // 머리끈
+    paint(14, 3, h); paint(14, 4, h);
+  } else {
+    paint(2, 3, h);
+    paint(13, 3, h);
+    paint(2, 4, accent);             // 리본
+    paint(13, 4, accent);
+    paint(1, 4, h); paint(1, 5, h);
+    paint(14, 4, h); paint(14, 5, h);
+  }
+}
 
 export function drawCharacter(ctx, opts) {
   const {
-    consonant, x, y, status = 'working', color = 'pink',
-    blink = false, bob = 0, selected = false, dim = false,
+    consonant = 'ㅇ', name = '', x = 0, y = 0, status = 'working', color = 'pink',
+    blink = false, bob = 0, selected = false, dim = false, moving = false, walk = 0,
+    shadow = true,
   } = opts;
-  const letter = LETTERS[consonant] || LETTERS['ㅇ'];
+
   const pal = CHARACTER_COLORS[color] || CHARACTER_COLORS.pink;
-  const cell = 4;
-  const gx = Math.round(x + 2);
-  const gy = Math.round(y + 2 + bob);
   const ink = PALETTE.ink;
+  const mood = MOODS[status] || MOODS.working;
+  const seed = hashOf(name ? name : consonant);
+  const tone = HAIR_TONES[seed % HAIR_TONES.length];
+  const style = Math.floor(seed / 11) % 4;
+
+  const gx = Math.round(x);
+  const gy = Math.round(y + 1 + bob);
+  /* 격자 한 칸 = 2 논리 픽셀. 좌표가 모두 정수라 2배 확대에서도 또렷합니다 */
+  const paint = (cx, cy, col) => px(ctx, gx + cx * U, gy + cy * U, U, U, col);
+  const cellColor = (ch) => {
+    switch (ch) {
+      case 'K': return ink;
+      case 'h': return tone.d;
+      case 'H': return tone.l;
+      case 's': return SKIN;
+      case 'S': return SKIN_SHADE;
+      case 'w': return WHITE;
+      case 'o': return pal.base;
+      case 'd': return pal.deep;
+      case 'n': return PANTS;
+      case 'k': return SHOE;
+      default: return null;
+    }
+  };
+
+  const phase = moving ? Math.floor(walk / 160) % 2 : 0;
+  const leftX = moving && phase === 1 ? 5 : 5 - (moving ? 1 : 0);
+  const rightX = moving && phase === 1 ? 10 : 9 + (moving ? 1 : 0);
 
   ctx.save();
-  if (dim) ctx.globalAlpha = 0.45;
+  if (dim) ctx.globalAlpha = 0.42;
 
   // 바닥 그림자
-  ctx.fillStyle = 'rgba(27,33,48,0.14)';
-  ctx.beginPath();
-  ctx.ellipse(x + SPRITE_W / 2, y + SPRITE_H - 2, 11, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 몸통(자음) — 어두운 실루엣 테두리 + 사용자 색
-  const cells = [];
-  letter.g.forEach((row, r) => {
-    for (let c = 0; c < row.length; c++) {
-      if (row[c] === '#') cells.push([c, r]);
-    }
-  });
-  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-    for (const [c, r] of cells) {
-      px(ctx, gx + c * cell + ox, gy + r * cell + oy, cell, cell, ink);
-    }
-  }
-  for (const [c, r] of cells) {
-    px(ctx, gx + c * cell, gy + r * cell, cell, cell, pal.base);
+  if (shadow) {
+    ctx.fillStyle = 'rgba(27,33,48,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(Math.round(x) + SPRITE_W / 2, Math.round(y) + SPRITE_H - 2, 11, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // 다리
-  px(ctx, gx + 4, gy + 7 * cell, 4, 4, ink);
-  px(ctx, gx + 16, gy + 7 * cell, 4, 4, ink);
-  px(ctx, gx + 5, gy + 7 * cell, 2, 3, pal.base);
-  px(ctx, gx + 17, gy + 7 * cell, 2, 3, pal.base);
-
-  // 눈
-  const mood = MOODS[status] || MOODS.working;
-  for (const [ex, ey] of letter.eyes) {
-    const ax = gx + ex * cell;
-    const ay = gy + ey * cell;
-    if (blink || mood.mouth === 'sleep') {
-      px(ctx, ax - 1, ay + 1, cell + 2, 1, ink);
-    } else {
-      px(ctx, ax, ay, cell, cell, ink);
-      px(ctx, ax, ay, 1, 1, PALETTE.paper);
+  /* ---- 뼈대: 머리카락 · 얼굴 · 옷 (다리 줄 y13~y15는 따로) ---- */
+  for (let ry = 0; ry < 13; ry++) {
+    const row = CHAR_GRID[ry];
+    for (let cx = 0; cx < row.length; cx++) {
+      const col = cellColor(row[cx]);
+      if (col) paint(cx, ry, col);
     }
   }
 
-  // 입
-  const [mx, my] = letter.mouth;
-  const bx = gx + mx * cell;
-  const by = gy + my * cell;
-  if (mood.mouth === 'flat') {
-    px(ctx, bx, by + 2, cell * 2, 2, ink);
-  } else if (mood.mouth === 'open') {
-    px(ctx, bx, by + 1, cell * 2, cell + 1, ink);
-    px(ctx, bx + 1, by + 2, cell * 2 - 2, 1, PALETTE.paper);
-  } else if (mood.mouth === 'smile') {
-    px(ctx, bx, by + 2, 2, 1, ink);
-    px(ctx, bx + 1, by + 3, cell * 2 - 2, 1, ink);
-    px(ctx, bx + cell * 2 - 2, by + 2, 2, 1, ink);
+  /* ---- 다리 (걸을 때 좌우로 살짝 벌어짐) ---- */
+  for (const ly of [13, 14]) {
+    paint(leftX, ly, PANTS); paint(leftX + 1, ly, PANTS);
+    paint(rightX, ly, PANTS); paint(rightX + 1, ly, PANTS);
+  }
+  paint(leftX - 1, 15, SHOE); paint(leftX, 15, SHOE); paint(leftX + 1, 15, SHOE);
+  paint(rightX, 15, SHOE); paint(rightX + 1, 15, SHOE); paint(rightX + 2, 15, SHOE);
+
+  /* ---- 머리카락 스타일 ---- */
+  drawHairStyle(paint, style, tone, pal.base);
+
+  /* ---- 얼굴: 눈 ---- */
+  if (blink || mood.eyes === 'closed') {
+    for (const ex of [4, 9]) {
+      paint(ex, 4, ink); paint(ex + 1, 4, ink); paint(ex + 2, 4, ink);
+    }
   } else {
-    px(ctx, bx, by + 2, cell * 2, 1, ink);
-    px(ctx, bx + cell * 2 + 4, by - 2, 4, 1, pal.deep);
-    px(ctx, bx + cell * 2 + 5, by - 5, 4, 1, pal.deep);
-    px(ctx, bx + cell * 2 + 4, by - 8, 4, 1, pal.deep);
+    for (const ex of [4, 9]) {
+      paint(ex, 3, WHITE); paint(ex + 1, 3, WHITE); paint(ex + 2, 3, WHITE);
+      paint(ex, 4, WHITE); paint(ex + 1, 4, ink); paint(ex + 2, 4, WHITE);
+    }
+  }
+
+  /* ---- 얼굴: 볼 · 입 ---- */
+  paint(3, 5, BLUSH);
+  paint(12, 5, BLUSH);
+  if (mood.mouth === 'open') {     // 말하는 중: 동그란 입
+    paint(7, 5, ink); paint(8, 5, ink);
+    paint(7, 6, ink); paint(8, 6, ink);
+    paint(7, 6, MOUTH_IN);
+  } else if (mood.mouth === 'smile') {
+    paint(6, 5, ink); paint(9, 5, ink);
+    paint(7, 6, ink); paint(8, 6, ink);
+  } else {
+    paint(7, 5, ink); paint(8, 5, ink);
+  }
+
+  /* ---- 상태 포즈 ---- */
+  if (mood.gesture) {              // 회의 중: 손을 들어 말하는 중
+    paint(13, 9, pal.base);
+    paint(14, 8, SKIN);
+    paint(13, 8, SKIN);
+  }
+  if (mood.sleep) {                // 자리 비움: 머리 위 zZ
+    paint(11, -2, pal.deep); paint(12, -2, pal.deep);
+    paint(12, -3, pal.deep);
+    paint(11, -4, pal.deep); paint(12, -4, pal.deep);
+    paint(14, -1, pal.deep);
   }
 
   ctx.restore();
@@ -472,13 +567,36 @@ export function drawCharacter(ctx, opts) {
     ctx.strokeStyle = pal.deep;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 1]);
-    ctx.strokeRect(Math.round(x - 2) + 0.5, Math.round(y - 5) + 0.5, SPRITE_W + 4, SPRITE_H + 3);
+    ctx.strokeRect(Math.round(x - 2) + 0.5, Math.round(y - 2) + 0.5, SPRITE_W + 4, SPRITE_H + 1);
     ctx.restore();
-    const bobY = blink ? 0 : -1;
-    px(ctx, x + 12, y - 14 + bobY, 6, 2, pal.deep);
-    px(ctx, x + 13, y - 12 + bobY, 4, 3, pal.deep);
-    px(ctx, x + 14, y - 9 + bobY, 2, 2, pal.deep);
+    const bobY = Math.round(bob);
+    px(ctx, x + 13, y - 12 + bobY, 6, 2, pal.deep);
+    px(ctx, x + 14, y - 10 + bobY, 4, 3, pal.deep);
+    px(ctx, x + 15, y - 7 + bobY, 2, 2, pal.deep);
   }
+}
+
+/* 이름표·목록·내 자리에 쓰는 미니 초상화 (같은 스프라이트를 1:1 픽셀로) */
+export function paintPortrait(canvas, opts = {}) {
+  if (!canvas || typeof canvas.getContext !== 'function') return;
+  const scale = Math.max(1, Math.round(opts.scale || 1));
+  canvas.width = PORTRAIT_W * scale;
+  canvas.height = PORTRAIT_H * scale;
+  const c2 = canvas.getContext('2d');
+  c2.setTransform(scale, 0, 0, scale, 0, 0);
+  c2.clearRect(0, 0, PORTRAIT_W, PORTRAIT_H);
+  drawCharacter(c2, {
+    ...opts,
+    x: 0,
+    y: -1,
+    bob: 0,
+    selected: false,
+    dim: false,
+    blink: false,
+    moving: false,
+    walk: 0,
+    shadow: false,
+  });
 }
 
 export function hitTest(members, lx, ly) {
