@@ -358,8 +358,13 @@ function renderBubble() {
   } else {
     bt.hidden = true;
   }
+  // 카드 제목을 가리지 않도록 맨 위 즐기 캐릭터는 말풍선을 아래로 내립니다
+  const below = d.y < 70;
+  bubble.classList.toggle('below', below);
   bubble.style.left = `${((d.x + 15) / LOGICAL_W) * 100}%`;
-  bubble.style.top = `${((d.y - 2) / LOGICAL_H) * 100}%`;
+  bubble.style.top = below
+    ? `${((d.y + SPRITE_H + 6) / LOGICAL_H) * 100}%`
+    : `${((d.y - 2) / LOGICAL_H) * 100}%`;
   bubble.hidden = false;
 }
 
