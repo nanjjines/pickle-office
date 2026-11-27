@@ -197,10 +197,10 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
 .card[data-accent="teal"]    { --acc: var(--teal);    --acc-soft: var(--teal-soft); }
 
 .card-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   border-bottom: 2px solid var(--ink); padding-bottom: 8px; margin-bottom: 12px;
 }
-.card-head h2 { margin: 0; font-size: 16px; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 7px; }
+.card-head h2 { margin: 0; font-size: 16px; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .card-head h2::before {
   content: ''; width: 9px; height: 9px; background: var(--acc); display: inline-block;
   border: 2px solid var(--ink);
