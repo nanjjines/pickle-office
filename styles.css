@@ -477,15 +477,16 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
   font-family: var(--font); cursor: pointer; border: 2px solid var(--cc-deep);
   background: var(--cc-soft); color: var(--cc-deep); padding: 3px 0 4px;
   display: grid; place-items: center; gap: 3px; line-height: 1.1;
-  font-weight: 700;
+  font-weight: 700; opacity: .72;
 }
 .cchip .sw { display: block; width: 100%; height: 13px; background: var(--cc); border: 2px solid var(--cc-deep); }
 .cchip small { font-size: 9px; font-weight: 700; letter-spacing: -0.03em; }
-.cchip:hover { border-color: var(--ink); }
+.cchip:hover { border-color: var(--ink); opacity: 1; }
 .cchip[aria-pressed="true"] {
-  background: var(--cc-soft); border-color: var(--ink);
+  background: var(--cc-soft); border-color: var(--ink); opacity: 1;
   box-shadow: 0 3px 0 var(--cc-deep); transform: translateY(-1px);
 }
+.cchip[aria-pressed="true"] small { color: var(--cc-deep); }
 .cchip[aria-pressed="true"] .sw { background: var(--cc-deep); border-color: var(--ink); }
 .color-grid-sm .cchip { padding: 2px; }
 .color-grid-sm .cchip .sw { height: 15px; }
