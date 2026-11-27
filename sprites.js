@@ -402,7 +402,7 @@ const CHAR_GRID = [
   '..KssssssssssK..',
   '..KssssssssssK..',
   '..KssssssssssK..',
-  '...KKKKSSKKKK...',
+  '...KKKSSSSKKK...',
   '...KKKKKKKKKK...',
   '...oKoowwooKo...',
   '...oKooddooKo...',

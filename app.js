@@ -13,6 +13,7 @@ import {
   LOGICAL_W,
   LOGICAL_H,
   SCALE,
+  SPRITE_W,
   SPRITE_H,
   CONSONANTS,
   ZONES,
@@ -260,7 +261,7 @@ function afterMembersChange() {
 }
 
 let frameNo = 0;
-function drawLoop(t) {
+function renderFrame(t) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(baseCanvas, 0, 0);
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
@@ -343,7 +344,15 @@ function drawLoop(t) {
 
   frameNo += 1;
   if (selectedMember && frameNo % 6 === 0) renderBubble();
+}
 
+/* 한 프레임에서 오류가 나도 캐릭터가 멈춰 서지 않도록 루프는 계속 돕니다 */
+function drawLoop(t) {
+  try {
+    renderFrame(t);
+  } catch (err) {
+    console.warn('[map]', err);
+  }
   requestAnimationFrame(drawLoop);
 }
 
