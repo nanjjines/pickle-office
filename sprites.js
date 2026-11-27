@@ -486,8 +486,9 @@ export function drawCharacter(ctx, opts) {
   };
 
   const phase = moving ? Math.floor(walk / 160) % 2 : 0;
-  const leftX = moving && phase === 1 ? 5 : 5 - (moving ? 1 : 0);
-  const rightX = moving && phase === 1 ? 10 : 9 + (moving ? 1 : 0);
+  /* 걸을 때는 두 다리가 번갈아 바깥으로 벌어집니다 */
+  const leftX = moving ? (phase === 0 ? 4 : 5) : 5;
+  const rightX = moving ? (phase === 0 ? 10 : 9) : 9;
 
   ctx.save();
   if (dim) ctx.globalAlpha = 0.42;
