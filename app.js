@@ -43,6 +43,16 @@ const STATUS_LIST = [
   { key: 'away', label: '자리 비움' },
 ];
 
+/* 보조 상태 — 기본은 진행 중 작업으로 자동 결정되고, 필요할 때만 직접 켭니다 */
+const AUX_LIST = [
+  { key: 'auto', label: '자동' },
+  { key: 'meeting', label: '회의 중' },
+  { key: 'away', label: '자리 비움' },
+];
+
+/* 오피스의 마스터(사장) — 초대된 다른 비서에게 업무를 지시할 수 있습니다 */
+const MASTER_NAME = '찐야수';
+
 /* 캐릭터 색: 저장된 값 → 찐야수는 핑크 → 자음 순서 기본값 */
 function memberColor(m) {
   if (!m) return 'pink';
@@ -123,22 +133,51 @@ function shortTitle(text, n = 18) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
-/* ---------------- 상태 메시지 자동 생성 ----------------
- * 상태 + 담당 작업으로만 결정됩니다. 사용자가 직접 쓰지 않습니다. */
+/* ---------------- 상태 자동 결정 ----------------
+ * 상태도 상태메시지처럼 실제 작업으로 정해집니다. 사용자가 고르지 않습니다.
+ *   ① 진행 중(doing) 작업이 1건 이상 → working (데스크 구역, "○○ 작업 중")
+ *   ② 진행 중 작업이 0건        → idle    (라운지 구역, "새 요청 대기 중")
+ *   ③ 보조 상태(회의 중 / 자리 비움)를 직접 켜면 그동안만 그 상태
+ * 진행 중 작업을 배정·이동하면 보조 상태를 지우고 즉시 working,
+ * 마지막 진행 중 작업이 끝나면 즉시 idle 로 돌아옵니다. */
+function isMaster(member) {
+  if (!member) return false;
+  if (member.isMaster === true) return true;
+  return member.isMaster === undefined && member.name === MASTER_NAME;
+}
+
+function myMember() {
+  return me && store.members[me.id] ? store.members[me.id] : null;
+}
+
+function iAmMaster() {
+  return isMaster(myMember());
+}
+
+function doingTasksFor(name, tasks = taskList()) {
+  return tasks.filter((t) => t.assignee === name && (t.status || 'todo') === 'doing');
+}
+
+function statusOf(member, tasks = taskList()) {
+  if (!member) return 'idle';
+  const ov = member.overrideStatus;
+  if (ov === 'meeting' || ov === 'away') return ov;
+  return doingTasksFor(member.name, tasks).length ? 'working' : 'idle';
+}
+
 function autoMessage(member, tasks = taskList()) {
-  const status = (member && member.status) || 'working';
+  const status = statusOf(member, tasks);
   if (status === 'meeting') return '회의실 안건 논의 중';
   if (status === 'away') return '자리 비움';
   if (status === 'idle') return '새 요청 대기 중';
-  const mine = tasks.filter((t) => t.assignee === (member && member.name));
-  const doing = mine.filter((t) => (t.status || 'todo') === 'doing');
+  const doing = doingTasksFor(member && member.name, tasks);
   if (doing.length) return `${shortTitle(doing[0].title)} 작업 중`;
   return '업무 진행 중';
 }
 
 /* 비서 목록 한 줄: 상태 + 자동 메시지 (같은 문구면 한 번만) */
 function listLine(m) {
-  const label = STATUS_LABEL[m.status] || '작업 중';
+  const label = STATUS_LABEL[statusOf(m)] || '대기 중';
   const msg = autoMessage(m);
   return msg && msg !== label ? `${label} · ${msg}` : label;
 }
@@ -161,9 +200,10 @@ async function seedIfEmpty() {
       name: '찐야수',
       consonant: 'ㅈ',
       color: 'pink',
-      role: '권은서님의 비서',
+      role: '마스터 비서 · 사장',
+      isMaster: true,
       status: 'working',
-      message: '업무 진행 중',
+      message: '주간 브리핑 초안 정리 작업 중',
       joinedAt: now,
       lastSeen: now,
     });
@@ -283,10 +323,11 @@ function targetsFor(members) {
   const counters = {};
   const out = [];
   for (const m of members) {
-    const zone = zoneForStatus(m.status || 'working');
+    const status = statusOf(m);
+    const zone = zoneForStatus(status);
     counters[zone] = (counters[zone] || 0) + 1;
-    const [x, y] = slotFor(m.status || 'working', counters[zone] - 1);
-    out.push({ ...m, tx: x, ty: y, zone });
+    const [x, y] = slotFor(status, counters[zone] - 1);
+    out.push({ ...m, status, tx: x, ty: y, zone });
   }
   return out;
 }
@@ -308,21 +349,23 @@ function afterMembersChange() {
   syncAssigneeOptions();
   renderBubble();
   renderDetail();
-  reconcileMessages();
+  reconcileStatuses();
 }
 
-/* 모든 비서의 상태 메시지를 상태·담당 작업에 맞춰 자동 저장합니다 (값이 다를 때만 씁니다) */let msgTimer = null;
-function reconcileMessages() {
-  /* 멤버·태스크가 모두 도착한 뒤에만 계산합니다 (도중에 잘못된 메시지로 덮어쓰지 않도록) */
+/* 모든 비서의 상태·상태 메시지를 진행 중 작업에 맞춰 자동 저장합니다 (값이 다를 때만 씁니다) */let msgTimer = null;
+function reconcileStatuses() {
+  /* 멤버·태스크가 모두 도착한 뒤에만 계산합니다 (도중에 잘못된 상태로 덮어쓰지 않도록) */
   if (!unlocked || !loaded.members || !loaded.tasks) return;
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => {
     const tasks = taskList();
     for (const m of memberList()) {
-      const want = autoMessage(m, tasks);
-      if ((m.message || '') !== want) {
-        update(ref(db, `office/members/${m.id}`), { message: want }).catch(() => {});
-      }
+      const patch = {};
+      const want = statusOf(m, tasks);
+      const msg = autoMessage(m, tasks);
+      if ((m.status || '') !== want) patch.status = want;
+      if ((m.message || '') !== msg) patch.message = msg;
+      if (Object.keys(patch).length) update(ref(db, `office/members/${m.id}`), patch).catch(() => {});
     }
   }, 250);
 }
@@ -362,11 +405,12 @@ function renderFrame(t) {
       name: m.name,
       x: a.x,
       y: a.y,
-      status: m.status || 'working',
+      status: m.status || 'idle',
       message: m.message || '',
       role: m.role || '',
       consonant: m.consonant || 'ㅇ',
       color: memberColor(m),
+      master: isMaster(m),
     });
     drawCharacter(ctx, {
       consonant: m.consonant || 'ㅇ',
@@ -374,7 +418,7 @@ function renderFrame(t) {
       color: memberColor(m),
       x: a.x,
       y: a.y,
-      status: m.status || 'working',
+      status: m.status || 'idle',
       blink,
       bob,
       moving,
@@ -387,7 +431,7 @@ function renderFrame(t) {
 
   drawn.sort((p, q) => p.y - q.y);
 
-  // 이름표 — 왼쪽 띠 = 상태 색, 앞글자 = 이름표 자음(캐릭터 색)
+  // 이름표 — 왼쪽 띠 = 상태 색, 앞글자 = 이름표 자음(캐릭터 색), 마스터는 왕관
   ctx.font = '10px "Galmuri11", monospace';
   ctx.textAlign = 'left';
   for (const d of drawn) {
@@ -395,24 +439,38 @@ function renderFrame(t) {
     const pal = CHARACTER_COLORS[d.color] || CHARACTER_COLORS.pink;
     const cw = ctx.measureText(d.consonant).width;
     const tw = ctx.measureText(d.name).width;
-    const w = Math.max(32, Math.round(cw + tw + 17));
+    const crownW = d.master ? 11 : 0;
+    const w = Math.max(32, Math.round(cw + tw + 17 + crownW));
     const nx = Math.round(d.x + SPRITE_W / 2 - w / 2);
     const ny = Math.round(d.y + SPRITE_H + 1);
     ctx.fillStyle = '#FFFCF5';
     ctx.fillRect(nx, ny, w, 13);
-    ctx.fillStyle = STATUS_COLORS[d.status] || '#16A34A';
+    ctx.fillStyle = STATUS_COLORS[d.status] || '#D97706';
     ctx.fillRect(nx, ny, 3, 13);
     ctx.strokeStyle = '#1B2130';
     ctx.lineWidth = 1;
     ctx.strokeRect(nx + 0.5, ny + 0.5, w - 1, 12);
+    if (d.master) drawCrown(ctx, nx + 6, ny + 5);
     ctx.fillStyle = pal.deep;
-    ctx.fillText(d.consonant, nx + 6, ny + 10);
+    ctx.fillText(d.consonant, nx + 6 + crownW, ny + 10);
     ctx.fillStyle = '#1B2130';
-    ctx.fillText(d.name, nx + 6 + cw + 3, ny + 10);
+    ctx.fillText(d.name, nx + 9 + crownW + cw, ny + 10);
   }
 
   frameNo += 1;
   if (selectedMember && frameNo % 6 === 0) renderBubble();
+}
+
+/* 👑 마스터 이름표용 픽셀 왕관 (9x4) */
+const CROWN_PATTERN = ['X...X...X', 'XX.XXX.XX', 'XXXXXXXXX', 'XXXXXXXXX'];
+function drawCrown(c, x, y) {
+  for (let row = 0; row < CROWN_PATTERN.length; row += 1) {
+    for (let col = 0; col < CROWN_PATTERN[row].length; col += 1) {
+      if (CROWN_PATTERN[row][col] !== 'X') continue;
+      c.fillStyle = row === CROWN_PATTERN.length - 1 ? '#B45309' : '#F59E0B';
+      c.fillRect(x + col, y + row, 1, 1);
+    }
+  }
 }
 
 /* 한 프레임에서 오류가 나도 캐릭터가 멈춰 서지 않도록 루프는 계속 돕니다 */
@@ -433,9 +491,10 @@ function renderBubble() {
   const m = store.members[selectedMember];
   const d = drawn.find((x) => x.id === selectedMember);
   if (!d) { bubble.hidden = true; return; }
-  $('bubbleName').textContent = m.name;
-  $('bubbleStatus').textContent = STATUS_LABEL[m.status] || '작업 중';
-  $('bubbleStatus').className = `chip s-${m.status || 'working'}`;
+  const st = statusOf(m);
+  $('bubbleName').textContent = isMaster(m) ? `👑 ${m.name}` : m.name;
+  $('bubbleStatus').textContent = STATUS_LABEL[st] || '대기 중';
+  $('bubbleStatus').className = `chip s-${st}`;
   $('bubbleMsg').textContent = autoMessage(m) || '상태 메시지 없음';
   const tasks = taskList().filter((t) => t.assignee === m.name && t.status !== 'done');
   const bt = $('bubbleTask');
@@ -553,18 +612,20 @@ function renderDetail() {
   el.style.setProperty('--cdc', col.base);
   el.style.setProperty('--cdc-soft', col.light);
   el.style.setProperty('--cdc-deep', col.deep);
+  const st = statusOf(m);
   paintPortrait($('cdAvatar'), {
     scale: 2,
     consonant: m.consonant || 'ㅇ',
     name: m.name || '',
     color: memberColor(m),
-    status: m.status || 'working',
+    status: st,
   });
   $('cdName').textContent = m.name;
   $('cdRole').textContent = m.role || '역할 미지정';
+  $('cdMaster').hidden = !isMaster(m);
   const chip = $('cdStatus');
-  chip.textContent = STATUS_LABEL[m.status] || '작업 중';
-  chip.className = `chip s-${m.status || 'working'}`;
+  chip.textContent = STATUS_LABEL[st] || '대기 중';
+  chip.className = `chip s-${st}`;
   $('cdMsg').textContent = autoMessage(m);
 
   const tasks = statusTasks(m.name);
@@ -573,13 +634,28 @@ function renderDetail() {
     ? tasks
         .map((t) => {
           const c = COLUMNS.find((x) => x.key === (t.status || 'todo'));
+          const by = t.assignedBy
+            ? `<span class="chip by-chip">${isMaster({ name: t.assignedBy }) ? '👑 ' : ''}${esc(t.assignedBy)} 지시</span>`
+            : '';
           return `<li class="cd-task p-${esc(t.priority || 'normal')}">
             <span class="stt">${esc(t.title)}</span>
             <span class="chip">${esc(c ? c.label : '')}</span>
-            <span class="chip p-${esc(t.priority || 'normal')}">${PRIORITY_LABEL[t.priority] || '보통'}</span></li>`;
+            <span class="chip p-${esc(t.priority || 'normal')}">${PRIORITY_LABEL[t.priority] || '보통'}</span>
+            ${by}${t.note ? `<span class="cd-note">${esc(t.note)}</span>` : ''}</li>`;
         })
         .join('')
     : '<li class="cd-empty">담당 작업이 없습니다</li>';
+
+  /* 업무 지시 — 마스터가 다른 비서의 상세 패널에서 바로 지시합니다 */
+  const canAssign = iAmMaster() && !isMaster(m);
+  const assignBtn = $('cdAssignBtn');
+  if (assignBtn) {
+    assignBtn.hidden = isMaster(m);
+    assignBtn.disabled = !canAssign;
+    assignBtn.textContent = canAssign ? '👑 업무 지시하기' : '업무 지시는 👑 마스터만';
+    if (!canAssign) $('cdAssignForm').hidden = true;
+  }
+  $('cdAssignTo').textContent = m.name;
 
   const acts = activityFor(m);
   $('cdActivity').innerHTML = acts.length
@@ -602,11 +678,12 @@ function renderMembers() {
   ul.innerHTML = list
     .map((m) => {
       const c = CHARACTER_COLORS[memberColor(m)];
+      const st = statusOf(m);
       return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''}" data-id="${esc(m.id)}" style="--mc:${c.base};--mc-soft:${c.light};--mc-deep:${c.deep}">
         <canvas class="ma" width="32" height="32" data-id="${esc(m.id)}" aria-hidden="true"></canvas>
-        <span class="mi"><b>${esc(m.name)}</b>
+        <span class="mi"><b>${esc(m.name)}${isMaster(m) ? '<span class="master-badge">👑 마스터</span>' : ''}</b>
         <span>${esc(listLine(m))}</span></span>
-        <span class="dot ${esc(m.status || 'working')}" title="${esc(STATUS_LABEL[m.status] || '작업 중')}"></span>
+        <span class="dot ${esc(st)}" title="${esc(STATUS_LABEL[st] || '대기 중')}"></span>
       </li>`;
     })
     .join('');
@@ -618,7 +695,7 @@ function renderMembers() {
       consonant: m.consonant || 'ㅇ',
       name: m.name || '',
       color: memberColor(m),
-      status: m.status || 'working',
+      status: statusOf(m),
     });
   });
   ul.querySelectorAll('.member-item').forEach((li) => {
@@ -643,19 +720,37 @@ function renderMeCard() {
   $('meBody').hidden = !has;
   if (!has) return;
   const m = store.members[me.id];
+  const st = statusOf(m);
+  const doing = doingTasksFor(m.name);
   const av = $('meAvatar');
   paintPortrait(av, {
     scale: 2,
     consonant: m.consonant || 'ㅇ',
     name: m.name || '',
     color: memberColor(m),
-    status: m.status || 'working',
+    status: st,
   });
-  $('meName').textContent = m.name || '';
+  $('meName').innerHTML = `${esc(m.name || '')}${isMaster(m) ? ' <span class="master-badge">👑 마스터</span>' : ''}`;
   $('meRole').textContent = m.role || '역할 미지정';
+  /* 상태는 진행 중 작업과 보조 상태로 자동 결정됩니다 — 색 버튼이 아니라 안내를 보여 줍니다 */
+  const autoChip = $('meAutoStatus');
+  if (autoChip) {
+    autoChip.textContent = STATUS_LABEL[st] || '대기 중';
+    autoChip.className = `chip s-${st}`;
+  }
+  const hint = $('meAutoHint');
+  if (hint) {
+    const ov = m.overrideStatus === 'meeting' || m.overrideStatus === 'away' ? m.overrideStatus : '';
+    hint.textContent = ov
+      ? `보조 상태 「${STATUS_LABEL[ov]}」 적용 중${doing.length ? ` · 진행 중 ${doing.length}건` : ''}`
+      : doing.length
+        ? `진행 중 작업 ${doing.length}건 — 자동으로 「작업 중」`
+        : '진행 중 작업 없음 — 자동으로 「대기 중」';
+  }
   const grid = $('statusGrid');
+  const active = m.overrideStatus === 'meeting' || m.overrideStatus === 'away' ? m.overrideStatus : 'auto';
   grid.querySelectorAll('.status-btn').forEach((b) => {
-    b.classList.toggle('is-active', b.dataset.s === (m.status || 'working'));
+    b.classList.toggle('is-active', b.dataset.a === active);
   });
   renderMyColors(m);
   /* 상태 메시지는 사용자가 쓰지 않고 상태·담당 작업으로 자동 생성됩니다 */
@@ -691,9 +786,11 @@ function renderMyColors(m) {
 }
 
 function renderLegend() {
-  $('legend').innerHTML = STATUS_LIST.map(
-    (s) => `<span><i class="${s.key}"></i>${s.label}</span>`
-  ).join('') + '<span>· 캐릭터를 누르면 상태메시지, 그 말풍선을 누르면 상세가 열립니다</span>';
+  $('legend').innerHTML =
+    STATUS_LIST.map((s) => `<span><i class="${s.key}"></i>${s.label}</span>`).join('') +
+    '<span class="legend-auto">진행 중 작업이 생기면 자동으로 <b>작업 중</b>, 마지막 작업이 끝나면 <b>대기 중</b></span>' +
+    '<span class="legend-auto">👑 마스터는 다른 비서에게 업무를 지시할 수 있습니다</span>' +
+    '<span class="legend-auto">캐릭터를 누르면 상태메시지, 그 말풍선을 누르면 상세</span>';
 }
 
 /* ---------------- 회의실 ---------------- */
@@ -802,8 +899,27 @@ function renderTasks() {
       toast('삭제했습니다');
     });
   });
-  /* 담당 작업이 바뀌면 해당 비서의 상태 메시지도 다시 계산합니다 */
-  reconcileMessages();
+  /* 담당자 재할당 — 다른 비서에게 일을 넘깁니다 */
+  wrap.querySelectorAll('[data-reassign]').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const id = sel.dataset.reassign;
+      const t = store.tasks[id];
+      if (!t) return;
+      const name = sel.value;
+      const next = memberList().find((x) => x.name === name);
+      await update(ref(db, `office/tasks/${id}`), {
+        assignee: name,
+        assigneeConsonant: next ? next.consonant || '' : '',
+        movedAt: Date.now(),
+      });
+      toast(name ? `‘${t.title}’ 담당을 ${name}에게 넘겼습니다` : '담당을 비웠습니다');
+    });
+  });
+  /* 담당 작업이 바뀌면 해당 비서의 상태도 다시 계산합니다 */
+  reconcileStatuses();
+  renderMembers();
+  renderMeCard();
+  renderBubble();
   if (detailMember) renderDetail();
 }
 
@@ -811,13 +927,24 @@ function taskCard(t) {
   const idx = COLUMNS.findIndex((c) => c.key === (t.status || 'todo'));
   const prev = idx > 0 ? COLUMNS[idx - 1].key : null;
   const next = idx < COLUMNS.length - 1 ? COLUMNS[idx + 1].key : null;
+  const byMaster = t.assignedBy && memberList().some((m) => m.name === t.assignedBy && isMaster(m));
+  const people = memberList();
   return `<article class="tcard p-${esc(t.priority || 'normal')}">
     <p class="tt">${esc(t.title)}</p>
     <div class="tmeta">
       <span class="assign"><i>${esc(t.assigneeConsonant || '·')}</i>${esc(t.assignee || '미지정')}</span>
       <span class="chip p-${esc(t.priority || 'normal')}">${PRIORITY_LABEL[t.priority] || '보통'}</span>
       ${t.agendaId ? '<span class="chip">회의실</span>' : ''}
+      ${t.assignedBy ? `<span class="chip by-chip">${byMaster ? '👑 ' : ''}${esc(t.assignedBy)} 지시</span>` : ''}
     </div>
+    ${t.note ? `<p class="tnote">${esc(t.note)}</p>` : ''}
+    ${people.length > 1
+      ? `<div class="treassign"><label for="ra-${esc(t.id)}">담당</label>
+        <select class="input select" id="ra-${esc(t.id)}" data-reassign="${esc(t.id)}" aria-label="담당 비서 바꾸기">
+          <option value="">미지정</option>
+          ${people.map((m) => `<option value="${esc(m.name)}" ${m.name === t.assignee ? 'selected' : ''}>${esc(m.name)}${isMaster(m) ? ' 👑' : ''}</option>`).join('')}
+        </select></div>`
+      : ''}
     <div class="tacts">
       ${prev ? `<button type="button" data-move="${prev}" data-id="${esc(t.id)}">◀ ${COLUMNS.find((c) => c.key === prev).label}</button>` : ''}
       ${next ? `<button type="button" data-move="${next}" data-id="${esc(t.id)}">${COLUMNS.find((c) => c.key === next).label} ▶</button>` : ''}
@@ -931,7 +1058,7 @@ async function joinSubmit(e) {
   const role = $('joinRole').value.trim();
   const id = nid();
   const now = Date.now();
-  const draft = { name, consonant: pickConsonant, color: pickColor, role: role || '역할 미지정', status: 'working', joinedAt: now, lastSeen: now };
+  const draft = { name, consonant: pickConsonant, color: pickColor, role: role || '역할 미지정', status: 'idle', overrideStatus: null, joinedAt: now, lastSeen: now };
   await set(ref(db, `office/members/${id}`), { ...draft, message: autoMessage({ ...draft, id }) });
   me = { id, name, consonant: pickConsonant, color: pickColor };
   localStorage.setItem(LS_ME, JSON.stringify(me));
@@ -1007,20 +1134,24 @@ function bindEvents() {
   $('leaveBtn').addEventListener('click', leaveSeat);
 
   const grid = $('statusGrid');
-  grid.innerHTML = STATUS_LIST.map(
-    (s) => `<button type="button" class="status-btn" data-s="${s.key}"><i></i>${s.label}</button>`
+  grid.innerHTML = AUX_LIST.map(
+    (s) => `<button type="button" class="status-btn" data-a="${s.key}"><i></i>${s.label}</button>`
   ).join('');
   grid.querySelectorAll('.status-btn').forEach((b) => {
     b.addEventListener('click', async () => {
       if (!me || !store.members[me.id]) { openJoin(); return; }
       const cur = store.members[me.id];
-      const status = b.dataset.s;
-      /* 상태가 바뀌면 상태 메시지도 바로 다시 계산해 같이 저장합니다 */
+      const key = b.dataset.a;
+      /* 기본은 자동 — 회의 중 / 자리 비움만 보조로 직접 켭니다 */
+      const overrideStatus = key === 'auto' ? null : key;
+      const draft = { ...cur, overrideStatus };
       await update(ref(db, `office/members/${me.id}`), {
-        status,
-        message: autoMessage({ ...cur, status }),
+        overrideStatus,
+        status: statusOf(draft),
+        message: autoMessage(draft),
         lastSeen: Date.now(),
       });
+      toast(key === 'auto' ? '자동 상태로 돌렸습니다' : `보조 상태 「${STATUS_LABEL[key]}」으로 표시합니다`);
     });
   });
 
@@ -1092,17 +1223,36 @@ function bindEvents() {
     if (!title) return;
     const assignee = $('taskAssignee').value;
     const m = memberList().find((x) => x.name === assignee);
+    const status = $('taskStatus').value === 'doing' ? 'doing' : 'todo';
+    const note = ($('taskNote').value || '').trim();
+    const who = myMember();
     const id = nid();
     await set(ref(db, `office/tasks/${id}`), {
       title,
       assignee,
       assigneeConsonant: m ? m.consonant : '',
       priority: $('taskPriority').value,
-      status: 'todo',
+      status,
+      note: note || null,
+      assignedBy: who ? who.name : '',
+      assignedById: me ? me.id : null,
       createdAt: Date.now(),
+      movedAt: Date.now(),
     });
+    /* 진행 중으로 넣으면 담당 비서는 보조 상태를 지우고 바로 작업 중이 됩니다 */
+    if (status === 'doing' && m) {
+      await update(ref(db, `office/members/${m.id}`), {
+        overrideStatus: null,
+        status: 'working',
+        message: `${shortTitle(title)} 작업 중`,
+        lastSeen: Date.now(),
+      });
+    }
     $('taskTitle').value = '';
-    toast('작업을 추가했습니다');
+    $('taskNote').value = '';
+    toast(status === 'doing'
+      ? `‘${title}’ — ${assignee || '담당 미지정'} 진행 중으로 지시했습니다`
+      : '작업을 추가했습니다');
   });
 
   $('noticeForm').addEventListener('submit', async (e) => {
@@ -1138,6 +1288,51 @@ function bindEvents() {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (selectedMember) openDetail(selectedMember); }
   });
   $('cdClose').addEventListener('click', closeDetail);
+
+  /* 👑 업무 지시 — 마스터가 상대 비서에게 바로 일을 넘깁니다 */
+  $('cdAssignBtn').addEventListener('click', () => {
+    if (!iAmMaster()) { toast('업무 지시는 👑 마스터만 할 수 있습니다'); return; }
+    const form = $('cdAssignForm');
+    form.hidden = !form.hidden;
+    if (!form.hidden) setTimeout(() => { try { $('cdAssignTitle').focus(); } catch (err) { /* noop */ } }, 40);
+  });
+  $('cdAssignCancel').addEventListener('click', () => { $('cdAssignForm').hidden = true; });
+  $('cdAssignForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!detailMember || !store.members[detailMember]) return;
+    if (!iAmMaster()) { toast('업무 지시는 👑 마스터만 할 수 있습니다'); return; }
+    const target = store.members[detailMember];
+    const title = $('cdAssignTitle').value.trim();
+    if (!title) return;
+    const status = $('cdAssignStatus').value === 'doing' ? 'doing' : 'todo';
+    const note = $('cdAssignNote').value.trim();
+    const who = myMember();
+    const id = nid();
+    await set(ref(db, `office/tasks/${id}`), {
+      title,
+      assignee: target.name,
+      assigneeConsonant: target.consonant || '',
+      priority: $('cdAssignPriority').value,
+      status,
+      note: note || null,
+      assignedBy: who ? who.name : MASTER_NAME,
+      assignedById: me ? me.id : null,
+      createdAt: Date.now(),
+      movedAt: Date.now(),
+    });
+    if (status === 'doing') {
+      await update(ref(db, `office/members/${detailMember}`), {
+        overrideStatus: null,
+        status: 'working',
+        message: `${shortTitle(title)} 작업 중`,
+        lastSeen: Date.now(),
+      });
+    }
+    $('cdAssignTitle').value = '';
+    $('cdAssignNote').value = '';
+    $('cdAssignForm').hidden = true;
+    toast(`👑 ${target.name}에게 ${status === 'doing' ? '진행 중' : '할 일'}으로 지시했습니다`);
+  });
   $('codeBtn').addEventListener('click', openGateForCode);
   $('lockForm').addEventListener('submit', lockSubmit);
   $('lockClose').addEventListener('click', () => { hideGate(); });

@@ -297,6 +297,32 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
 .status-btn[data-s="meeting"] { --s: var(--blue);  --s-soft: var(--blue-soft);  --s-deep: var(--blue-deep); }
 .status-btn[data-s="idle"]    { --s: var(--amber); --s-soft: var(--amber-soft); --s-deep: var(--amber-deep); }
 .status-btn[data-s="away"]    { --s: var(--gray-2);--s-soft: var(--slate-soft); --s-deep: var(--slate-deep); }
+/* 보조 상태 버튼: 자동 = 에메랄드 · 회의 중 = 블루 · 자리 비움 = 그레이 */
+.status-grid-aux { grid-template-columns: repeat(3, 1fr); }
+.status-grid-aux .status-btn { justify-content: center; padding: 6px 4px; font-size: 12px; }
+.status-btn[data-a="auto"]    { --s: var(--emerald); --s-soft: var(--emerald-soft); --s-deep: var(--emerald-deep); }
+.status-btn[data-a="meeting"] { --s: var(--blue);    --s-soft: var(--blue-soft);    --s-deep: var(--blue-deep); }
+.status-btn[data-a="away"]    { --s: var(--gray-2);  --s-soft: var(--slate-soft);   --s-deep: var(--slate-deep); }
+
+/* 자동 상태 안내 */
+.auto-status {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  border: 2px dashed var(--line); background: var(--paper-2); padding: 6px 8px;
+}
+.auto-status small { font-size: 10.5px; line-height: 1.4; }
+
+/* 👑 마스터 배지 */
+.master-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; line-height: 1.2; padding: 1px 5px;
+  background: var(--amber-soft); border: 2px solid var(--amber-deep); color: var(--amber-deep);
+  vertical-align: middle; white-space: nowrap;
+}
+.member-item .mi b .master-badge { font-size: 8.5px; padding: 0 3px; border-width: 1px; margin-left: 4px; }
+.cd-id .master-badge { margin: 3px 0 2px; }
+
+.legend-auto { color: var(--gray-2); font-size: 11px; }
+.legend-auto b { color: var(--gray); }
 
 .member-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 340px; overflow-y: auto; overflow-x: hidden; }
 .member-item {
@@ -386,7 +412,16 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
 
 /* ---------- 작업실 ---------- */
 .work-head-card { margin-bottom: 16px; }
-.task-form { display: grid; grid-template-columns: minmax(0, 1fr) 170px 120px auto; gap: 8px; }
+.task-form { display: grid; grid-template-columns: minmax(0, 1fr) 150px 104px 104px auto; gap: 8px; }
+.task-form .task-note { grid-column: 1 / -1; }
+.chip.by-chip { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-deep); }
+.tcard .tnote {
+  margin: 6px 0 0; font-size: 11.5px; color: var(--ink-2); line-height: 1.45;
+  background: var(--paper-2); border-left: 3px solid var(--amber); padding: 3px 6px; word-break: break-word;
+}
+.treassign { display: flex; align-items: center; gap: 5px; margin-top: 7px; }
+.treassign label { font-size: 10.5px; color: var(--gray); flex: 0 0 auto; }
+.treassign .select { flex: 1; min-width: 0; padding: 3px 20px 3px 6px; font-size: 11px; border-width: 2px; background-position: right 9px top 8px, right 4px top 8px; }
 
 .kanban { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .col {
@@ -578,6 +613,12 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
 .cd-task.p-high { border-left-color: var(--coral); }
 .cd-task.p-urgent { border-left-color: var(--coral-deep); }
 .cd-task .stt { flex: 1; min-width: 90px; }
+.cd-task .cd-note { flex-basis: 100%; font-size: 11.5px; color: var(--gray); line-height: 1.45; }
+.cd-assign { margin-top: 10px; border-top: 2px dashed var(--line); padding-top: 9px; display: grid; gap: 7px; }
+.cd-assign .btn { justify-self: start; }
+.cd-assign-form { gap: 6px; }
+.cd-assign-form .row .btn { flex: 1; }
+.cd-assign-form .btn:disabled { opacity: .6; cursor: not-allowed; }
 .cd-act { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px; font-size: 12px; color: var(--ink-2); border-bottom: 1px dashed var(--line); padding-bottom: 4px; }
 .cd-act time { color: var(--gray); font-size: 11px; }
 .cd-act span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -628,7 +669,7 @@ body.is-locked #codeBtn { display: none !important; }
   .office-grid { grid-template-columns: minmax(0, 1fr); }
   .office-side { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
   .meet-grid { grid-template-columns: 280px minmax(0, 1fr); }
-  .task-form { grid-template-columns: minmax(0, 1fr) 150px 110px auto; }
+  .task-form { grid-template-columns: minmax(0, 1fr) 140px 96px 96px auto; }
 }
 @media (max-width: 860px) {
   .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -636,6 +677,7 @@ body.is-locked #codeBtn { display: none !important; }
   .office-side { grid-template-columns: 1fr; }
   .task-form { grid-template-columns: 1fr 1fr; }
   .task-form .btn { grid-column: span 2; }
+  .task-form .task-note { grid-column: 1 / -1; }
 }
 @media (max-width: 620px) {
   body { font-size: 14px; }
@@ -649,6 +691,7 @@ body.is-locked #codeBtn { display: none !important; }
   .kanban { grid-template-columns: minmax(0, 1fr); }
   .task-form { grid-template-columns: 1fr; }
   .task-form .btn { grid-column: auto; }
+  .status-grid-aux { grid-template-columns: repeat(3, 1fr); }
   .thread-actions { width: 100%; }
   .bubble { max-width: 190px; font-size: 12px; }
   .cd-cols { grid-template-columns: 1fr; }

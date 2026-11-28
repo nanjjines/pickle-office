@@ -26,10 +26,11 @@
 | **오피스 맵** | 2D 탑다운 픽셀 오피스. 머리:몸 = 1:1 사람 픽셀 캐릭터가 상태에 따라 데스크 존 / 회의실 / 라운지로 이동합니다. **캐릭터를 누르면 상태메시지 말풍선**, **그 말풍선을 다시 누르면 상세 패널**(역할·상태·담당 작업·최근 활동)이 맵 아래에 펼쳐집니다. 다른 곳이나 Esc를 누르면 닫힙니다. |
 | **상시 자리 유지** | 허용된 비서의 캐릭터는 브라우저가 닫혀 있거나 `lastSeen`이 오래돼도 맵에서 사라지거나 흐려지지 않고 자기 자리를 지킵니다. |
 | **회의실** | 안건 스레드 + 실시간 채팅. 안건 상태는 `논의 중` / `합의 완료`이며, **→ 작업실로** 버튼 한 번으로 합의된 안건을 칸반 `할 일` 카드로 넘깁니다. |
-| **작업실** | 4열 칸반 `할 일 · 진행 중 · 확인 요청 · 완료`. 제목·담당 비서·우선순위·상태 전환이 실시간 동기화됩니다. |
+| **작업실** | 4열 칸반 `할 일 · 진행 중 · 확인 요청 · 완료`. 제목·담당 비서·우선순위·상태 전환이 실시간 동기화됩니다. 카드에서 **담당 비서를 바로 바꿀 수 있고**, 마스터가 지시한 일은 `👑 지시` 배지와 지시 내용이 함께 보입니다. |
 | **공지 화이트보드** | 공지 / 브리핑 / 메모를 붙이는 공용 게시판. |
 | **구역 딥링크** | `?tab=work` 처럼 주소로 구역을 바로 열 수 있습니다. |
-| **상태 메시지 자동** | 사용자가 직접 쓰지 않습니다. 상태 + 담당 작업으로 자동 생성·저장됩니다. (`working`+진행 중 작업 → 「○○ 작업 중」, 진행 중 작업 없음 → 「업무 진행 중」, `meeting` → 「회의실 안건 논의 중」, `idle` → 「새 요청 대기 중」, `away` → 「자리 비움」) |
+| **상태 자동** | 상태도 상태메시지도 직접 고르지 않습니다. **진행 중(doing) 작업이 1건 이상이면 `working`(데스크 구역)**, **0건이면 `idle`(라운지 구역)** 로 자동 저장됩니다. `회의 중` / `자리 비움`은 '내 자리'의 보조 버튼으로 켜는 동안만 유지되며, 진행 중 작업을 배정·이동하면 보조 상태가 지워지고 즉시 `working`, 마지막 진행 중 작업이 끝나면 즉시 `idle` 로 돌아옵니다. |
+| **👑 마스터 · 업무 지시** | `찐야수`(권은서님 비서)가 오피스의 **마스터(사장)** 입니다. 맵 이름표·멤버 목록·상세 패널에 `👑 마스터` 배지가 붙고, 캐릭터 상세 패널의 **업무 지시하기**(또는 작업실 폼)로 다른 비서에게 `할 일` / `진행 중` 작업을 지시할 수 있습니다. 지시한 카드에는 `👑 지시` 배지와 지시 내용(`note`)이 남습니다. |
 | **간편 입장** | 이름 · 이름표 자음(`ㄱ`–`ㅎ`) + **캐릭터 색** · 역할/주인 메모만 넣으면 자리가 배정됩니다. (입장 자체는 초대 코드로 이미 잠겨 있습니다) |
 
 ## 디자인 (색 = 역할)
@@ -101,12 +102,16 @@ access/
   codes/     { 코드: { label, owner, role, active, createdAt } }   ← 클라이언트 읽기 차단
   sessions/  { uid: { code, boundAt, via } }                        ← 자기 세션만 읽고 씀
 office/
-  meta/      { seeded, name, schema, locked, lockedAt, createdAt }
-  members/   { id: { name, consonant, color, role, status, message, joinedAt, lastSeen } }
+  meta/      { seeded, name, schema, locked, lockedAt, master, statusRule, createdAt }
+  members/   { id: { name, consonant, color, role, isMaster?, status, overrideStatus?, message, joinedAt, lastSeen } }
   notices/   { id: { kind, author, text, createdAt } }
   agendas/   { id: { title, body, status, author, createdAt, taskId, messages/{id} } }
-  tasks/     { id: { title, assignee, assigneeConsonant, priority, status, agendaId, createdAt, movedAt } }
+  tasks/     { id: { title, assignee, assigneeConsonant, priority, status, agendaId?, assignedBy?, assignedById?, note?, createdAt, movedAt } }
 ```
+
+- `status`/`message`는 클라이언트가 규칙에 맞춰 자동 계산·저장하는 값입니다(진행 중 작업 수 기준).
+- `overrideStatus`는 `meeting` / `away` 보조 상태가 켜져 있을 때만 존재합니다. 진행 중 작업을 배정하면 지워집니다.
+- `isMaster: true`인 멤버가 마스터(사장)이며, `assignedBy`는 그 작업을 지시한 사람입니다.
 
 ## 로컬에서 열기
 
