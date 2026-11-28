@@ -481,6 +481,7 @@ canvas.addEventListener('click', (e) => {
   if (!selectedMember || (detailMember && detailMember !== selectedMember)) closeDetail();
   renderMembers();
   renderBubble();
+  if (selectedMember) setTimeout(() => scrollBelowBar($('bubble')), 40);
 });
 
 /* ---------------- 2단계: 캐릭터 상세 패널 ----------------
