@@ -516,7 +516,18 @@ function openDetail(id) {
   if (!id || !store.members[id]) return;
   detailMember = id;
   renderDetail();
-  $('charDetail').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  scrollBelowBar($('charDetail'));
+}
+
+/* 상단 고정 바(topbar)에 가리지 않게 스크롤합니다 (모바일에서 특히 중요) */
+function scrollBelowBar(el, extra = 10) {
+  if (!el || el.hidden) return;
+  const bar = document.querySelector('.topbar');
+  const off = (bar ? bar.offsetHeight : 0) + extra;
+  const top = el.getBoundingClientRect().top + window.scrollY - off;
+  if (top < window.scrollY - 4 || el.getBoundingClientRect().top < off) {
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }
 }
 
 function closeDetail() {
@@ -604,10 +615,16 @@ function renderMembers() {
   });
   ul.querySelectorAll('.member-item').forEach((li) => {
     li.addEventListener('click', () => {
-      selectedMember = li.dataset.id === selectedMember ? null : li.dataset.id;
+      /* 이미 보고 있는 캐릭터를 다시 누르면 선택 해제합니다 */
+      const same = li.dataset.id === selectedMember;
+      selectedMember = same ? null : li.dataset.id;
       renderMembers();
       renderBubble();
-      if (selectedMember) switchTab('office');
+      if (selectedMember) {
+        switchTab('office');
+        /* 좌우 목록에서 골라도 말풍선이 상단 바에 가리지 않도록 맵을 화면 안으로 가져옵니다 */
+        setTimeout(() => scrollBelowBar($('mapWrap')), 60);
+      }
     });
   });
 }
