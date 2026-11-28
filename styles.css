@@ -535,6 +535,93 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
   border-top: 2px dashed var(--line); margin-top: 22px;
 }
 
+/* ---------- 상태 메시지(자동) ---------- */
+.auto-msg { border: 2px dashed var(--line); background: var(--paper-2); padding: 6px 9px 7px; }
+.auto-msg-text { margin: 3px 0 2px; font-size: 13px; font-weight: 700; color: var(--ink); word-break: keep-all; }
+.auto-msg small { font-size: 10.5px; color: var(--gray-2); }
+
+/* ---------- 1단계 말풍선 → 2단계 상세 ---------- */
+.bubble { cursor: pointer; }
+.bubble:hover { box-shadow: 5px 5px 0 var(--ink); }
+.bubble:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.bubble-hint {
+  margin: 6px 0 0; font-size: 10.5px; color: var(--paper); background: var(--ink);
+  display: inline-block; padding: 1px 5px; letter-spacing: 0.01em;
+}
+
+.char-detail {
+  --cdc: var(--emerald); --cdc-soft: var(--emerald-soft); --cdc-deep: var(--emerald-deep);
+  margin-top: 12px; padding: 11px 13px 12px;
+  border: 3px solid var(--ink); border-left: 8px solid var(--cdc); background: var(--paper);
+  box-shadow: 4px 4px 0 var(--shadow); animation: pop .12s steps(2, end);
+}
+.char-detail[hidden] { display: none; }
+.cd-head { display: flex; align-items: center; gap: 10px; border-bottom: 2px solid var(--ink); padding-bottom: 8px; }
+.cd-avatar {
+  width: 40px; height: 40px; flex: 0 0 auto; display: block; border: 2px solid var(--ink);
+  background: var(--cdc-soft); image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.cd-id { flex: 1; min-width: 0; }
+.cd-id b { display: block; font-size: 15px; line-height: 1.3; }
+.cd-id p { margin: 0; font-size: 12px; color: var(--gray); }
+.cd-msg { margin: 9px 0 2px; font-size: 13.5px; color: var(--ink-2); font-weight: 700; word-break: keep-all; }
+.cd-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+.cd-col h3 { margin: 0 0 6px; font-size: 12px; color: var(--gray); display: flex; align-items: center; gap: 6px; }
+.cd-col h3 .count { background: var(--cdc); }
+.cd-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.cd-task {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  border: 2px solid var(--line); border-left: 4px solid var(--blue); background: var(--paper-2);
+  padding: 5px 7px; font-size: 12.5px;
+}
+.cd-task.p-low { border-left-color: var(--gray-2); }
+.cd-task.p-high { border-left-color: var(--coral); }
+.cd-task.p-urgent { border-left-color: var(--coral-deep); }
+.cd-task .stt { flex: 1; min-width: 90px; }
+.cd-act { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px; font-size: 12px; color: var(--ink-2); border-bottom: 1px dashed var(--line); padding-bottom: 4px; }
+.cd-act time { color: var(--gray); font-size: 11px; }
+.cd-act span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cd-empty { font-size: 12px; color: var(--gray); border: 2px dashed var(--line); padding: 8px; text-align: center; }
+.cd-seat { margin: 9px 0 0; font-size: 11px; color: var(--gray-2); }
+
+/* ---------- 접근 잠금 (초대 코드) ---------- */
+.lock-chip {
+  font-size: 11px; font-weight: 700; color: var(--pink-deep); white-space: nowrap;
+  background: var(--pink-soft); border: 2px solid var(--pink); padding: 3px 7px;
+}
+body.is-locked { overflow: hidden; }
+body.is-locked .tabs,
+body.is-locked main,
+body.is-locked .foot,
+body.is-locked #joinBtn,
+body.is-locked #codeBtn { display: none !important; }
+.lock-gate {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
+  background-color: var(--paper-2);
+  background-image: linear-gradient(45deg, rgba(27,33,48,.05) 0 8px, transparent 8px 16px);
+  background-size: 16px 16px;
+}
+.lock-gate[hidden] { display: none; }
+.lock-card {
+  width: min(420px, 100%); background: var(--paper); border: 3px solid var(--ink);
+  border-top: 8px solid var(--pink); box-shadow: 8px 8px 0 var(--shadow); padding: 16px 18px 18px;
+}
+.lock-card h2 { margin: 0 0 8px; font-size: 17px; }
+.lock-mark { position: relative; width: 34px; height: 34px; margin: 0 0 10px; }
+.lock-bar { position: absolute; left: 7px; top: 1px; width: 20px; height: 15px; border: 5px solid var(--ink); border-bottom: none; }
+.lock-body { position: absolute; left: 1px; top: 13px; width: 32px; height: 20px; background: var(--pink); border: 4px solid var(--ink); }
+.lock-desc { margin: 0 0 11px; font-size: 13px; color: var(--gray); line-height: 1.6; }
+.lock-spinner { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--gray); padding: 6px 0 2px; }
+.lock-spinner[hidden] { display: none; }
+.lock-spinner i { width: 10px; height: 10px; background: var(--amber); border: 2px solid var(--ink); animation: blink 1s steps(2, end) infinite; }
+.lock-form { display: grid; gap: 6px; }
+.lock-form[hidden] { display: none; }
+.lock-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.lock-msg { min-height: 18px; margin: 9px 0 0; font-size: 12.5px; }
+.lock-msg[data-kind="error"] { color: var(--coral); font-weight: 700; }
+.lock-msg[data-kind="info"] { color: var(--gray); }
+.lock-help { margin: 8px 0 0; font-size: 11px; color: var(--gray-2); line-height: 1.55; border-top: 2px dashed var(--line); padding-top: 8px; }
+
 /* ---------- 반응형 ---------- */
 @media (max-width: 1040px) {
   .office-grid { grid-template-columns: minmax(0, 1fr); }
@@ -563,6 +650,10 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
   .task-form .btn { grid-column: auto; }
   .thread-actions { width: 100%; }
   .bubble { max-width: 190px; font-size: 12px; }
+  .cd-cols { grid-template-columns: 1fr; }
+  .lock-chip { display: none; }
+  .lock-card { padding: 14px 14px 16px; }
+  .lock-card h2 { font-size: 15.5px; }
   .map-tag { font-size: 9px; padding: 0 4px; }
   .legend { gap: 9px; font-size: 11px; }
   .color-grid { gap: 4px; }

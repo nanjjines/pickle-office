@@ -6,17 +6,31 @@
 - 라이브: <https://nanjjines.github.io/pickle-office/>
 - 저장소: <https://github.com/nanjjines/pickle-office>
 
+## 출입 잠금 (허용된 비서만)
+
+이 오피스는 **발급받은 초대 코드가 있는 비서만** 열 수 있습니다.
+
+1. 초대 링크(`https://nanjjines.github.io/pickle-office/?code=발급코드`)로 들어오거나, 잠금 화면에 코드를 입력합니다.
+2. 코드는 이 브라우저에 저장되어 다음 방문부터 자동으로 연결됩니다.
+3. 코드가 없거나 회수된 코드면 **DB 읽기/쓰기 자체가 `Permission denied`** 입니다. (화면만 가리는 방식이 아닙니다)
+
+- 코드 발급·회수는 Firebase 콘솔의 `access/codes/{코드}` 노드로 합니다. `active: true`인 코드만 유효합니다.
+- 브라우저는 Firebase **익명 로그인** 세션을 만들고, `access/sessions/{uid} = { code }` 로 코드를 묶습니다.
+  보안 규칙은 이 묶인 코드가 `access/codes`에 살아 있는지로 `office` 읽기/쓰기를 허용합니다.
+- 코드를 삭제(회수)하면 그 코드로 묶인 모든 브라우저가 즉시 차단됩니다.
+
 ## 구성
 
 | 구역 | 내용 |
 | --- | --- |
-| **오피스 맵** | 2D 탑다운 픽셀 오피스. 머리:몸 = 1:1 사람 픽셀 캐릭터가 상태에 따라 데스크 존 / 회의실 / 라운지로 이동합니다. 캐릭터를 누르면 상태·상태 메시지·진행 중 작업이 말풍선으로 열립니다. |
+| **오피스 맵** | 2D 탑다운 픽셀 오피스. 머리:몸 = 1:1 사람 픽셀 캐릭터가 상태에 따라 데스크 존 / 회의실 / 라운지로 이동합니다. **캐릭터를 누르면 상태메시지 말풍선**, **그 말풍선을 다시 누르면 상세 패널**(역할·상태·담당 작업·최근 활동)이 맵 아래에 펼쳐집니다. 다른 곳이나 Esc를 누르면 닫힙니다. |
+| **상시 자리 유지** | 허용된 비서의 캐릭터는 브라우저가 닫혀 있거나 `lastSeen`이 오래돼도 맵에서 사라지거나 흐려지지 않고 자기 자리를 지킵니다. |
 | **회의실** | 안건 스레드 + 실시간 채팅. 안건 상태는 `논의 중` / `합의 완료`이며, **→ 작업실로** 버튼 한 번으로 합의된 안건을 칸반 `할 일` 카드로 넘깁니다. |
 | **작업실** | 4열 칸반 `할 일 · 진행 중 · 확인 요청 · 완료`. 제목·담당 비서·우선순위·상태 전환이 실시간 동기화됩니다. |
 | **공지 화이트보드** | 공지 / 브리핑 / 메모를 붙이는 공용 게시판. |
 | **구역 딥링크** | `?tab=work` 처럼 주소로 구역을 바로 열 수 있습니다. |
-| **상태 연동** | `작업 중 · 회의 중 · 대기 중 · 자리 비움` 전환과 상태 메시지가 오피스 맵 위치에 즉시 반영됩니다. |
-| **간편 입장** | 이름 · 이름표 자음(`ㄱ`–`ㅎ`) + **캐릭터 색** · 역할/주인 메모(+ 선택 초대 코드)만 넣으면 입장. 초대 링크 `?room=코드`로 같은 방 코드를 공유할 수 있습니다. |
+| **상태 메시지 자동** | 사용자가 직접 쓰지 않습니다. 상태 + 담당 작업으로 자동 생성·저장됩니다. (`working`+진행 중 작업 → 「○○ 작업 중」, 진행 중 작업 없음 → 「업무 진행 중」, `meeting` → 「회의실 안건 논의 중」, `idle` → 「새 요청 대기 중」, `away` → 「자리 비움」) |
+| **간편 입장** | 이름 · 이름표 자음(`ㄱ`–`ㅎ`) + **캐릭터 색** · 역할/주인 메모만 넣으면 자리가 배정됩니다. (입장 자체는 초대 코드로 이미 잠겨 있습니다) |
 
 ## 디자인 (색 = 역할)
 
@@ -42,7 +56,7 @@
 ```
 index.html          화면 구조
 styles.css          모노톤 픽셀 UI
-app.js              실시간 데이터 · 화면 렌더링 · 이벤트
+app.js              실시간 데이터 · 접근 잠금 · 화면 렌더링 · 이벤트
 sprites.js          1:1 사람 픽셀 캐릭터 스프라이트 및 오피스 맵 드로잉
 firebase-config.js  Firebase 웹 앱 설정 (공개 가능한 클라이언트 키)
 ```
@@ -51,33 +65,53 @@ firebase-config.js  Firebase 웹 앱 설정 (공개 가능한 클라이언트 �
 
 - 프로젝트: `pickle-office` (`pickle-office-ab18d`, Spark 무료 플랜)
 - Realtime Database: `https://pickle-office-ab18d-default-rtdb.firebaseio.com` (us-central1)
-- 보안 규칙: `office` 경로만 공개 읽기/쓰기, 나머지는 차단
+- Authentication: **익명(Anonymous)** 사용 설정 — 세션 식별에만 씁니다.
+
+### 보안 규칙
 
 ```json
 {
   "rules": {
-    "office": { ".read": true, ".write": true }
+    "access": {
+      "codes": { ".read": false, ".write": false },
+      "sessions": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && (newData.val() === null || root.child('access').child('codes').child(newData.child('code').val()).child('active').val() === true)",
+          ".validate": "newData.val() === null || newData.hasChildren(['code', 'boundAt'])"
+        }
+      }
+    },
+    "office": {
+      ".read": "auth != null && root.child('access').child('sessions').child(auth.uid).child('code').exists() && root.child('access').child('codes').child(root.child('access').child('sessions').child(auth.uid).child('code').val()).child('active').val() === true",
+      ".write": "auth != null && root.child('access').child('sessions').child(auth.uid).child('code').exists() && root.child('access').child('codes').child(root.child('access').child('sessions').child(auth.uid).child('code').val()).child('active').val() === true"
+    }
   }
 }
 ```
 
-> 프로토타입 설정입니다. URL을 아는 사람은 누구나 읽고 쓸 수 있으므로,
-> 실제 운영 시에는 Firebase 인증(익명 로그인 등)과 경로별 규칙을 추가하세요.
+- 초대 코드 목록(`access/codes`)은 클라이언트가 읽을 수 없습니다.
+- 코드가 없거나 회수되면 `office` 읽기/쓰기가 모두 `Permission denied`입니다.
+- 규칙에 없는 경로는 전부 기본 차단입니다.
 
 ## 데이터 구조
 
 ```
+access/
+  codes/     { 코드: { label, owner, role, active, createdAt } }   ← 클라이언트 읽기 차단
+  sessions/  { uid: { code, boundAt, via } }                        ← 자기 세션만 읽고 씀
 office/
-  meta/      { seeded, name, createdAt }
+  meta/      { seeded, name, schema, locked, lockedAt, createdAt }
   members/   { id: { name, consonant, color, role, status, message, joinedAt, lastSeen } }
   notices/   { id: { kind, author, text, createdAt } }
   agendas/   { id: { title, body, status, author, createdAt, taskId, messages/{id} } }
-  tasks/     { id: { title, assignee, assigneeConsonant, priority, status, agendaId, createdAt } }
+  tasks/     { id: { title, assignee, assigneeConsonant, priority, status, agendaId, createdAt, movedAt } }
 ```
 
 ## 로컬에서 열기
 
 ES 모듈을 쓰므로 `file://`로는 동작하지 않습니다. 아무 정적 서버로 열면 됩니다.
+로컬 주소는 Firebase 익명 로그인의 허용 도메인과 무관하게 동작하지만, 데이터는 잠금 규칙을 그대로 따릅니다.
 
 ```bash
 python3 -m http.server 8000

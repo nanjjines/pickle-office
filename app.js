@@ -2,12 +2,14 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getDatabase,
   ref,
+  get,
   onValue,
   set,
   update,
   remove,
   runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { firebaseConfig } from './firebase-config.js';
 import {
   LOGICAL_W,
@@ -31,6 +33,8 @@ import {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+/* 익명 인증 세션 — RTDB 보안 규칙이 이 세션(uid)에 허용된 초대 코드가 묶여 있는지로 읽기/쓰기를 판단합니다 */
+const auth = getAuth(app);
 
 const STATUS_LIST = [
   { key: 'working', label: '작업 중' },
@@ -58,13 +62,16 @@ const PRIORITY_LABEL = { low: '낮음', normal: '보통', high: '높음', urgent
 const KIND_LABEL = { notice: '공지', brief: '브리핑', memo: '메모' };
 
 const LS_ME = 'pickle-office:me';
-const LS_ROOM = 'pickle-office:room';
+const LS_CODE = 'pickle-office:code';
 
 const store = { members: {}, notices: {}, agendas: {}, tasks: {} };
 let me = null;
 let selectedMember = null;
 let selectedAgenda = null;
-let roomCode = new URLSearchParams(location.search).get('room') || '';
+let detailMember = null;
+const access = { state: 'checking', code: '', uid: '' };
+let unlocked = false;
+let subscribed = false;
 const anims = new Map();
 const drawn = [];
 
@@ -104,6 +111,28 @@ function sortByTime(obj, dir = -1) {
     .sort((a, b) => (Number(a.createdAt || 0) - Number(b.createdAt || 0)) * dir);
 }
 
+function taskList() {
+  return Object.entries(store.tasks || {}).map(([id, t]) => ({ id, ...t }));
+}
+
+function shortTitle(text, n = 18) {
+  const s = String(text || '');
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
+/* ---------------- 상태 메시지 자동 생성 ----------------
+ * 상태 + 담당 작업으로만 결정됩니다. 사용자가 직접 쓰지 않습니다. */
+function autoMessage(member, tasks = taskList()) {
+  const status = (member && member.status) || 'working';
+  if (status === 'meeting') return '회의실 안건 논의 중';
+  if (status === 'away') return '자리 비움';
+  if (status === 'idle') return '새 요청 대기 중';
+  const mine = tasks.filter((t) => t.assignee === (member && member.name));
+  const doing = mine.filter((t) => (t.status || 'todo') === 'doing');
+  if (doing.length) return `${shortTitle(doing[0].title)} 작업 중`;
+  return '업무 진행 중';
+}
+
 /* ---------------- 초기 시드 ---------------- */
 async function seedIfEmpty() {
   try {
@@ -120,7 +149,7 @@ async function seedIfEmpty() {
       color: 'pink',
       role: '권은서님의 비서',
       status: 'working',
-      message: '오늘의 브리핑 정리 중',
+      message: '업무 진행 중',
       joinedAt: now,
       lastSeen: now,
     });
@@ -254,10 +283,29 @@ function afterMembersChange() {
     else { a.tx = m.tx; a.ty = m.ty; }
   }
   if (selectedMember && !store.members[selectedMember]) { selectedMember = null; $('bubble').hidden = true; }
+  if (detailMember && !store.members[detailMember]) closeDetail();
   renderMembers();
   renderMeCard();
   syncAssigneeOptions();
   renderBubble();
+  renderDetail();
+  reconcileMessages();
+}
+
+/* 모든 비서의 상태 메시지를 상태·담당 작업에 맞춰 자동 저장합니다 (값이 다를 때만 씁니다) */
+let msgTimer = null;
+function reconcileMessages() {
+  if (!unlocked) return;
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => {
+    const tasks = taskList();
+    for (const m of memberList()) {
+      const want = autoMessage(m, tasks);
+      if ((m.message || '') !== want) {
+        update(ref(db, `office/members/${m.id}`), { message: want }).catch(() => {});
+      }
+    }
+  }, 250);
 }
 
 let frameNo = 0;
@@ -297,6 +345,7 @@ function renderFrame(t) {
       y: a.y,
       status: m.status || 'working',
       message: m.message || '',
+      role: m.role || '',
       consonant: m.consonant || 'ㅇ',
       color: memberColor(m),
     });
@@ -312,7 +361,8 @@ function renderFrame(t) {
       moving,
       walk: t,
       selected: selectedMember === m.id,
-      dim: m.status === 'away',
+      /* 상시 자리 유지: 브라우저가 닫혀 있거나 lastSeen이 오래돼도 흐려지지 않습니다 */
+      dim: false,
     });
   }
 
@@ -365,17 +415,17 @@ function renderBubble() {
   $('bubbleName').textContent = m.name;
   $('bubbleStatus').textContent = STATUS_LABEL[m.status] || '작업 중';
   $('bubbleStatus').className = `chip s-${m.status || 'working'}`;
-  $('bubbleMsg').textContent = m.message || '상태 메시지 없음';
-  const task = Object.values(store.tasks || {}).find(
-    (t) => t.assignee === m.name && t.status !== 'done'
-  );
+  $('bubbleMsg').textContent = autoMessage(m) || '상태 메시지 없음';
+  const tasks = taskList().filter((t) => t.assignee === m.name && t.status !== 'done');
   const bt = $('bubbleTask');
-  if (task) {
+  if (tasks.length) {
     bt.hidden = false;
-    bt.textContent = `▸ ${task.title} · ${(COLUMNS.find((c) => c.key === task.status) || {}).label || ''}`;
+    bt.textContent = `▸ ${shortTitle(tasks[0].title, 20)} · ${(COLUMNS.find((c) => c.key === (tasks[0].status || 'todo')) || {}).label || ''}${tasks.length > 1 ? ` 외 ${tasks.length - 1}건` : ''}`;
   } else {
     bt.hidden = true;
   }
+  const hint = $('bubbleHint');
+  if (hint) hint.hidden = false;
   // 카드 제목을 가리지 않도록 맨 위 즐기 캐릭터는 말풍선을 아래로 내립니다
   const below = d.y < 70;
   bubble.classList.toggle('below', below);
@@ -411,9 +461,98 @@ canvas.addEventListener('click', (e) => {
     }
   }
   selectedMember = id && id !== selectedMember ? id : null;
+  if (!selectedMember || (detailMember && detailMember !== selectedMember)) closeDetail();
   renderMembers();
   renderBubble();
 });
+
+/* ---------------- 2단계: 캐릭터 상세 패널 ----------------
+ * 1단계 — 캐릭터 클릭: 상태메시지 말풍선
+ * 2단계 — 그 말풍선을 클릭: 상세 행동·담당 작업이 아래에 펼쳐집니다 */
+function statusTasks(name) {
+  const order = COLUMNS.map((c) => c.key);
+  return taskList()
+    .filter((t) => t.assignee === name)
+    .sort((a, b) => order.indexOf(a.status || 'todo') - order.indexOf(b.status || 'todo'));
+}
+
+function activityFor(m) {
+  const items = [];
+  for (const t of taskList()) {
+    if (t.assignee !== m.name) continue;
+    const col = COLUMNS.find((c) => c.key === (t.status || 'todo'));
+    items.push({ ts: Number(t.movedAt || t.createdAt || 0), text: `작업실 · ‘${shortTitle(t.title, 24)}’ ${col ? col.label : ''}` });
+  }
+  for (const n of sortByTime(store.notices, 1)) {
+    if (n.author === m.name) items.push({ ts: Number(n.createdAt || 0), text: `${KIND_LABEL[n.kind] || '공지'} · ${shortTitle(n.text, 28)}` });
+  }
+  for (const a of sortByTime(store.agendas, 1)) {
+    if (a.author === m.name) items.push({ ts: Number(a.createdAt || 0), text: `회의실 · 안건 ‘${shortTitle(a.title, 24)}’` });
+    for (const msg of sortByTime(a.messages, 1)) {
+      if (msg.author === m.name) items.push({ ts: Number(msg.createdAt || 0), text: `회의실 · ${shortTitle(a.title, 16)} — “${shortTitle(msg.text, 22)}”` });
+    }
+  }
+  return items.filter((i) => i.ts).sort((a, b) => b.ts - a.ts).slice(0, 6);
+}
+
+function openDetail(id) {
+  if (!id || !store.members[id]) return;
+  detailMember = id;
+  renderDetail();
+  $('charDetail').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function closeDetail() {
+  detailMember = null;
+  const el = $('charDetail');
+  if (el) el.hidden = true;
+}
+
+function renderDetail() {
+  const el = $('charDetail');
+  if (!el) return;
+  if (!detailMember || !store.members[detailMember]) { el.hidden = true; return; }
+  const m = store.members[detailMember];
+  const col = CHARACTER_COLORS[memberColor(m)];
+  el.style.setProperty('--cdc', col.base);
+  el.style.setProperty('--cdc-soft', col.light);
+  el.style.setProperty('--cdc-deep', col.deep);
+  paintPortrait($('cdAvatar'), {
+    scale: 2,
+    consonant: m.consonant || 'ㅇ',
+    name: m.name || '',
+    color: memberColor(m),
+    status: m.status || 'working',
+  });
+  $('cdName').textContent = m.name;
+  $('cdRole').textContent = m.role || '역할 미지정';
+  const chip = $('cdStatus');
+  chip.textContent = STATUS_LABEL[m.status] || '작업 중';
+  chip.className = `chip s-${m.status || 'working'}`;
+  $('cdMsg').textContent = autoMessage(m);
+
+  const tasks = statusTasks(m.name);
+  $('cdTaskCount').textContent = tasks.length;
+  $('cdTasks').innerHTML = tasks.length
+    ? tasks
+        .map((t) => {
+          const c = COLUMNS.find((x) => x.key === (t.status || 'todo'));
+          return `<li class="cd-task p-${esc(t.priority || 'normal')}">
+            <span class="stt">${esc(t.title)}</span>
+            <span class="chip">${esc(c ? c.label : '')}</span>
+            <span class="chip p-${esc(t.priority || 'normal')}">${PRIORITY_LABEL[t.priority] || '보통'}</span></li>`;
+        })
+        .join('')
+    : '<li class="cd-empty">담당 작업이 없습니다</li>';
+
+  const acts = activityFor(m);
+  $('cdActivity').innerHTML = acts.length
+    ? acts.map((a) => `<li class="cd-act"><time>${relTime(a.ts)}</time><span>${esc(a.text)}</span></li>`).join('')
+    : '<li class="cd-empty">기록된 활동이 없습니다</li>';
+
+  $('cdSeat').textContent = `자리 유지 중 · 최근 확인 ${relTime(m.lastSeen) || '기록 없음'} · 입장 ${relTime(m.joinedAt) || '기록 없음'}`;
+  el.hidden = false;
+}
 
 /* ---------------- 좌측/사이드 렌더 ---------------- */
 function renderMembers() {
@@ -426,12 +565,11 @@ function renderMembers() {
   }
   ul.innerHTML = list
     .map((m) => {
-      const online = me && me.id === m.id ? true : m.lastSeen && Date.now() - Number(m.lastSeen) < 3 * 60e3;
       const c = CHARACTER_COLORS[memberColor(m)];
-      return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''} ${online ? '' : 'is-offline'}" data-id="${esc(m.id)}" style="--mc:${c.base};--mc-soft:${c.light};--mc-deep:${c.deep}">
+      return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''}" data-id="${esc(m.id)}" style="--mc:${c.base};--mc-soft:${c.light};--mc-deep:${c.deep}">
         <canvas class="ma" width="32" height="32" data-id="${esc(m.id)}" aria-hidden="true"></canvas>
         <span class="mi"><b>${esc(m.name)}</b>
-        <span>${STATUS_LABEL[m.status] || '작업 중'}${m.message ? ' · ' + esc(m.message) : ''}</span></span>
+        <span>${STATUS_LABEL[m.status] || '작업 중'} · ${esc(autoMessage(m))}</span></span>
         <span class="dot ${esc(m.status || 'working')}" title="${esc(STATUS_LABEL[m.status] || '작업 중')}"></span>
       </li>`;
     })
@@ -478,8 +616,8 @@ function renderMeCard() {
     b.classList.toggle('is-active', b.dataset.s === (m.status || 'working'));
   });
   renderMyColors(m);
-  const input = $('statusMsg');
-  if (document.activeElement !== input) input.value = m.message || '';
+  /* 상태 메시지는 사용자가 쓰지 않고 상태·담당 작업으로 자동 생성됩니다 */
+  $('meMsg').textContent = autoMessage(m);
 }
 
 /* ---------- 색 고르기 (입장 모달 · 내 자리) ---------- */
@@ -513,7 +651,7 @@ function renderMyColors(m) {
 function renderLegend() {
   $('legend').innerHTML = STATUS_LIST.map(
     (s) => `<span><i class="${s.key}"></i>${s.label}</span>`
-  ).join('') + '<span>· 캐릭터를 누르면 상세, 구역을 누르면 해당 탭으로 이동합니다</span>';
+  ).join('') + '<span>· 캐릭터를 누르면 상태메시지, 그 말풍선을 누르면 상세가 열립니다</span>';
 }
 
 /* ---------------- 회의실 ---------------- */
@@ -738,7 +876,6 @@ function openJoin() {
   renderJoinPreview();
   $('joinModal').hidden = false;
   localStorage.setItem('pickle-office:seen', '1');
-  $('joinCode').value = roomCode || '';
   setTimeout(() => $('joinName').focus(), 50);
 }
 
@@ -747,24 +884,10 @@ async function joinSubmit(e) {
   const name = $('joinName').value.trim();
   if (!name) return;
   const role = $('joinRole').value.trim();
-  const code = $('joinCode').value.trim();
-  if (code) {
-    roomCode = code;
-    localStorage.setItem(LS_ROOM, code);
-    updateRoomChip();
-  }
   const id = nid();
   const now = Date.now();
-  await set(ref(db, `office/members/${id}`), {
-    name,
-    consonant: pickConsonant,
-    color: pickColor,
-    role: role || '역할 미지정',
-    status: 'working',
-    message: '',
-    joinedAt: now,
-    lastSeen: now,
-  });
+  const draft = { name, consonant: pickConsonant, color: pickColor, role: role || '역할 미지정', status: 'working', joinedAt: now, lastSeen: now };
+  await set(ref(db, `office/members/${id}`), { ...draft, message: autoMessage({ ...draft, id }) });
   me = { id, name, consonant: pickConsonant, color: pickColor };
   localStorage.setItem(LS_ME, JSON.stringify(me));
   $('joinModal').hidden = true;
@@ -798,14 +921,16 @@ function registerPresence() {
   }, 40e3);
 }
 
-function updateRoomChip() {
-  const chip = $('roomChip');
-  if (roomCode) {
-    chip.hidden = false;
-    $('roomCodeText').textContent = roomCode.toUpperCase();
-  } else {
-    chip.hidden = true;
-  }
+function renderLockChip() {
+  const chip = $('lockChip');
+  if (!chip) return;
+  chip.hidden = !unlocked;
+}
+
+/* 접속 코드 다시 입력(잠금 화면 열기) */
+function openGateForCode() {
+  access.code = localStorage.getItem(LS_CODE) || '';
+  showGate('need-code', '새 초대 코드를 입력하면 이 브라우저가 그 코드로 다시 연결됩니다.');
 }
 
 async function leaveSeat() {
@@ -835,13 +960,13 @@ function bindEvents() {
   $('joinName').addEventListener('input', renderJoinPreview);
   $('leaveBtn').addEventListener('click', leaveSeat);
 
-  $('shareBtn').addEventListener('click', async () => {
-    const url = roomCode ? `${location.origin}${location.pathname}?room=${encodeURIComponent(roomCode)}` : location.href;
+  $('shareBtn')?.addEventListener('click', async () => {
+    const url = location.href.split('?')[0];
     try {
       await navigator.clipboard.writeText(url);
-      toast('초대 링크를 복사했습니다');
+      toast('주소를 복사했습니다 · 초대 코드는 따로 전달하세요');
     } catch (err) {
-      window.prompt('아래 링크를 복사하세요', url);
+      window.prompt('아래 주소를 복사하세요', url);
     }
   });
 
@@ -852,18 +977,15 @@ function bindEvents() {
   grid.querySelectorAll('.status-btn').forEach((b) => {
     b.addEventListener('click', async () => {
       if (!me || !store.members[me.id]) { openJoin(); return; }
-      await update(ref(db, `office/members/${me.id}`), { status: b.dataset.s, lastSeen: Date.now() });
+      const cur = store.members[me.id];
+      const status = b.dataset.s;
+      /* 상태가 바뀌면 상태 메시지도 바로 다시 계산해 같이 저장합니다 */
+      await update(ref(db, `office/members/${me.id}`), {
+        status,
+        message: autoMessage({ ...cur, status }),
+        lastSeen: Date.now(),
+      });
     });
-  });
-
-  let msgTimer = null;
-  $('statusMsg').addEventListener('input', (e) => {
-    if (!me || !store.members[me.id]) return;
-    clearTimeout(msgTimer);
-    const val = e.target.value;
-    msgTimer = setTimeout(() => {
-      update(ref(db, `office/members/${me.id}`), { message: val, lastSeen: Date.now() }).catch(() => {});
-    }, 500);
   });
 
   $('agendaForm').addEventListener('submit', async (e) => {
@@ -963,43 +1085,165 @@ function bindEvents() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      $('joinModal').hidden = true;
-      if (selectedMember) { selectedMember = null; $('bubble').hidden = true; renderMembers(); }
-    }
+    if (e.key !== 'Escape') return;
+    $('joinModal').hidden = true;
+    /* 상세 패널 → 말풍선 순서로 닫힙니다 */
+    if (detailMember) { closeDetail(); return; }
+    if (selectedMember) { selectedMember = null; $('bubble').hidden = true; renderMembers(); }
+  });
+
+  /* 1단계: 캐릭터 위 말풍선 → 2단계: 말풍선을 누르면 상세가 펼쳐짐 */
+  const bubble = $('bubble');
+  bubble.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (selectedMember) openDetail(selectedMember);
+  });
+  bubble.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (selectedMember) openDetail(selectedMember); }
+  });
+  $('cdClose').addEventListener('click', closeDetail);
+  $('codeBtn').addEventListener('click', openGateForCode);
+  $('lockForm').addEventListener('submit', lockSubmit);
+
+  /* 상세 패널 바같을 누르면 닫힘 */
+  document.addEventListener('click', (e) => {
+    if (!detailMember) return;
+    const el = $('charDetail');
+    if (!el || el.hidden) return;
+    if (el.contains(e.target) || $('bubble').contains(e.target) || canvas.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('.member-item')) return;
+    closeDetail();
   });
 }
 
-/* ---------------- 시작 ---------------- */
-function boot() {
-  buildConsonantGrid();
-  buildColorGrid();
-  renderLegend();
-  buildMapLabels();
-  bindEvents();
-  updateRoomChip();
+/* ---------------- 접근 잠금 (초대 코드) ----------------
+ * DB는 보안 규칙으로 잠겨 있습니다. 익명 로그인 세션(uid)에 유효한 초대 코드가 묶여 있어야
+ * office 노드를 읽고 쓸 수 있습니다. 코드가 없으면 읽기/쓰기 자체가 거부됩니다. */
+function gateMsg(text, kind = 'info') {
+  const el = $('lockMsg');
+  el.textContent = text || '';
+  el.dataset.kind = kind;
+}
 
-  const savedRoom = localStorage.getItem(LS_ROOM);
-  if (!roomCode && savedRoom) { roomCode = savedRoom; updateRoomChip(); }
-  const params = new URLSearchParams(location.search).get('room');
-  if (params) { roomCode = params; localStorage.setItem(LS_ROOM, roomCode); updateRoomChip(); }
+function showGate(state, message = '', kind = 'info') {
+  unlocked = false;
+  access.state = state;
+  document.body.classList.add('is-locked');
+  $('lockGate').hidden = false;
+  renderLockChip();
+  const checking = state === 'checking';
+  $('lockForm').hidden = checking;
+  $('lockSpinner').hidden = !checking;
+  gateMsg(message, kind);
+  if (state === 'need-code') {
+    $('lockCode').value = access.code || '';
+    setTimeout(() => { try { $('lockCode').focus(); } catch (e) { /* noop */ } }, 80);
+  }
+}
 
-  // ?tab=work 처럼 구역을 바로 열 수 있게 (공유용)
-  const tabParam = new URLSearchParams(location.search).get('tab');
-  if (tabParam && ['office', 'meeting', 'work', 'notice'].includes(tabParam)) switchTab(tabParam);
+function hideGate() {
+  unlocked = true;
+  document.body.classList.remove('is-locked');
+  $('lockGate').hidden = true;
+  renderLockChip();
+}
 
+async function bindSession(code) {
+  await set(ref(db, `access/sessions/${access.uid}`), { code, boundAt: Date.now(), via: 'web' });
+  access.code = code;
+  localStorage.setItem(LS_CODE, code);
+}
+
+async function canReadOffice() {
   try {
-    const saved = JSON.parse(localStorage.getItem(LS_ME) || 'null');
-    if (saved && saved.id) me = saved;
-  } catch (err) { /* ignore */ }
+    const snap = await get(ref(db, 'office/members'));
+    return snap.val() !== null;
+  } catch (err) {
+    return false;
+  }
+}
 
-  subscribe();
-  requestAnimationFrame(drawLoop);
+async function lockSubmit(e) {
+  e.preventDefault();
+  const code = $('lockCode').value.trim();
+  if (!code) return;
+  $('lockClose').hidden = true;
+  showGate('checking', '초대 코드를 확인하는 중…');
+  try {
+    await bindSession(code);
+  } catch (err) {
+    access.code = '';
+    localStorage.removeItem(LS_CODE);
+    showGate('need-code', '초대 코드가 올바르지 않거나 회수되었습니다.', 'error');
+    return;
+  }
+  if (await canReadOffice()) {
+    unlock();
+    toast('허용된 비서로 확인되었습니다');
+  } else {
+    showGate('need-code', '이 코드로는 아직 열람 권한이 없습니다. 잠시 후 다시 시도해 주세요.', 'error');
+  }
+}
+
+function stripCodeFromUrl() {
+  try {
+    const u = new URL(location.href);
+    if (!u.searchParams.has('code')) return;
+    u.searchParams.delete('code');
+    history.replaceState(null, '', u.pathname + (u.search ? u.search : '') + u.hash);
+  } catch (err) { /* noop */ }
+}
+
+async function authenticate() {
+  try {
+    const cred = await signInAnonymously(auth);
+    access.uid = cred.user.uid;
+  } catch (err) {
+    $('lockForm').hidden = true;
+    showGate('need-code', `실시간 인증에 실패했습니다 (${err.code || err.message}). 새로고침해 주세요.`, 'error');
+    return;
+  }
+
+  let bound = '';
+  try {
+    const s = await get(ref(db, `access/sessions/${access.uid}`));
+    if (s.exists() && s.val() && s.val().code) bound = String(s.val().code);
+  } catch (err) { /* 규칙 적용 전이거나 읽기 거부 — 코드 입력으로 진행 */ }
+
+  const urlCode = (new URLSearchParams(location.search).get('code') || '').trim();
+  const savedCode = (localStorage.getItem(LS_CODE) || '').trim();
+  const wanted = urlCode || savedCode;
+
+  if (bound && (!wanted || wanted === bound)) {
+    access.code = bound;
+    if (await canReadOffice()) { unlock(); return; }
+  }
+  if (wanted && wanted !== bound) {
+    localStorage.setItem(LS_CODE, wanted);
+    access.code = wanted;
+    try {
+      await bindSession(wanted);
+      if (await canReadOffice()) { unlock(); toast('허용된 비서로 확인되었습니다'); return; }
+    } catch (err) {
+      access.code = '';
+      localStorage.removeItem(LS_CODE);
+      showGate('need-code', '초대 코드가 올바르지 않거나 회수되었습니다.', 'error');
+      return;
+    }
+  }
+  showGate('need-code', bound ? '연결이 만료되었습니다. 초대 코드를 다시 입력해 주세요.' : '허용된 비서만 들어올 수 있습니다. 초대 코드를 입력하세요.');
+}
+
+function unlock() {
+  hideGate();
+  stripCodeFromUrl();
+  if (!subscribed) { subscribe(); subscribed = true; }
   seedIfEmpty().then(() => {
     setTimeout(() => {
       if (me && store.members[me.id]) {
         registerPresence();
         selectedMember = me.id;
+        renderBubble();
       } else {
         if (me) {
           me = null;
@@ -1011,6 +1255,28 @@ function boot() {
       }
     }, 1600);
   });
+}
+
+/* ---------------- 시작 ---------------- */
+function boot() {
+  buildConsonantGrid();
+  buildColorGrid();
+  renderLegend();
+  buildMapLabels();
+  bindEvents();
+
+  // ?tab=work 처럼 구역을 바로 열 수 있게 (공유용)
+  const tabParam = new URLSearchParams(location.search).get('tab');
+  if (tabParam && ['office', 'meeting', 'work', 'notice'].includes(tabParam)) switchTab(tabParam);
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_ME) || 'null');
+    if (saved && saved.id) me = saved;
+  } catch (err) { /* ignore */ }
+
+  requestAnimationFrame(drawLoop);
+  showGate('checking', '허용된 비서인지 확인하는 중…');
+  authenticate();
 }
 
 boot();

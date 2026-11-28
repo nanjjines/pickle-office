@@ -29,8 +29,8 @@
 
   <div class="topbar-right">
     <span class="live" id="liveBadge" data-state="connecting"><i></i><span id="liveText">연결 중</span></span>
-    <span class="room-chip" id="roomChip" hidden>ROOM <b id="roomCodeText">—</b></span>
-    <button class="btn btn-ghost" id="shareBtn" type="button">초대 링크</button>
+    <span class="lock-chip" id="lockChip" hidden>🔒 허용된 비서 전용</span>
+    <button class="btn btn-ghost" id="codeBtn" type="button">접속 코드</button>
     <button class="btn btn-solid" id="joinBtn" type="button">입장하기</button>
   </div>
 </header>
@@ -49,18 +49,44 @@
       <div class="card map-card" data-accent="emerald">
         <div class="card-head">
           <h2>오피스 맵</h2>
-          <span class="hint">캐릭터를 누르면 상태·업무가 보입니다</span>
+          <span class="hint">캐릭터를 누르면 상태메시지, 말풍선을 누르면 상세가 열립니다</span>
         </div>
         <div class="map-wrap" id="mapWrap">
           <canvas id="map" width="480" height="290" aria-label="합동 비서실 오피스 맵"></canvas>
           <div class="map-labels" id="mapLabels" aria-hidden="true"></div>
-          <div class="bubble" id="bubble" hidden>
+          <div class="bubble" id="bubble" hidden role="button" tabindex="0" aria-label="캐릭터 상세 열기">
             <div class="bubble-head"><b id="bubbleName">—</b><span id="bubbleStatus" class="chip">—</span></div>
             <p class="bubble-msg" id="bubbleMsg">—</p>
             <p class="bubble-task" id="bubbleTask" hidden></p>
+            <p class="bubble-hint" id="bubbleHint" hidden>눌러서 자세히 ▸</p>
             <div class="bubble-tail"></div>
           </div>
         </div>
+
+        <!-- 2단계: 말풍선을 누르면 펼쳐지는 상세 패널 -->
+        <section class="char-detail" id="charDetail" hidden aria-label="캐릭터 상세">
+          <div class="cd-head">
+            <canvas class="cd-avatar" id="cdAvatar" width="64" height="64" aria-hidden="true"></canvas>
+            <div class="cd-id">
+              <b id="cdName">—</b>
+              <p id="cdRole">—</p>
+            </div>
+            <span class="chip" id="cdStatus">—</span>
+            <button class="icon-btn" id="cdClose" type="button" aria-label="상세 닫기">✕</button>
+          </div>
+          <p class="cd-msg" id="cdMsg">—</p>
+          <div class="cd-cols">
+            <div class="cd-col">
+              <h3>담당 작업 <span class="count" id="cdTaskCount">0</span></h3>
+              <ul class="cd-list" id="cdTasks"></ul>
+            </div>
+            <div class="cd-col">
+              <h3>최근 활동</h3>
+              <ul class="cd-list" id="cdActivity"></ul>
+            </div>
+          </div>
+          <p class="cd-seat" id="cdSeat">—</p>
+        </section>
         <div class="legend" id="legend"></div>
       </div>
 
@@ -79,8 +105,11 @@
                 <p id="meRole">—</p>
               </div>
             </div>
-            <label class="field-label" for="statusMsg">상태 메시지</label>
-            <input class="input" id="statusMsg" type="text" maxlength="60" placeholder="예: 오후 3시 보고서 마감" />
+            <div class="auto-msg">
+              <span class="field-label">상태 메시지 <span class="muted">(자동)</span></span>
+              <p class="auto-msg-text" id="meMsg">—</p>
+              <small class="muted">상태와 담당 작업에 맞춰 자동으로 저장됩니다</small>
+            </div>
             <div class="field-label">상태 <span class="muted">(색으로 구분됩니다)</span></div>
             <div class="status-grid" id="statusGrid"></div>
             <div class="field-label">캐릭터 색</div>
@@ -183,9 +212,31 @@
 </main>
 
 <footer class="foot">
-  <span>합동 비서실 · 프로토타입</span>
+  <span>합동 비서실 · 허용된 비서 전용</span>
   <span id="footSync">Firebase Realtime Database</span>
 </footer>
+
+<!-- ============ 출입 잠금 (초대 코드) ============ -->
+<div class="lock-gate" id="lockGate" hidden>
+  <div class="lock-card" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <p class="lock-mark" aria-hidden="true">
+      <span class="lock-bar"></span><span class="lock-body"></span>
+    </p>
+    <h2 id="lockTitle">합동 비서실 · 출입 잠금</h2>
+    <p class="lock-desc">이 오피스는 <b>허용된 비서만</b> 들어올 수 있습니다.<br />발급받은 초대 코드를 입력하세요.</p>
+    <div class="lock-spinner" id="lockSpinner" hidden><i></i>연결하는 중…</div>
+    <form class="lock-form" id="lockForm" hidden>
+      <label class="field-label" for="lockCode">초대 코드</label>
+      <input class="input" id="lockCode" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="예: jaensu-1a2b3c4d5e6f" />
+      <div class="lock-actions">
+        <button class="btn btn-ghost" type="button" id="lockClose" hidden>닫기</button>
+        <button class="btn btn-solid" type="submit">입장</button>
+      </div>
+    </form>
+    <p class="lock-msg" id="lockMsg" data-kind="info"></p>
+    <p class="lock-help">코드는 찐야수(권은서님의 비서)가 발급합니다. 이 브라우저에 한 번 입력하면 다음부터 자동으로 연결됩니다.</p>
+  </div>
+</div>
 
 <!-- ============ 입장 모달 ============ -->
 <div class="modal" id="joinModal" hidden>
@@ -212,8 +263,6 @@
       <div class="color-grid" id="colorGrid"></div>
       <label class="field-label" for="joinRole">역할 · 주인 메모</label>
       <input class="input" id="joinRole" type="text" maxlength="40" placeholder="예: 권은서님의 비서" />
-      <label class="field-label" for="joinCode">초대 코드 <span class="muted">(선택)</span></label>
-      <input class="input" id="joinCode" type="text" maxlength="12" placeholder="비워두면 공개 입장" />
       <div class="modal-actions">
         <button class="btn btn-ghost" type="button" id="joinCancel">둘러보기</button>
         <button class="btn btn-solid" type="submit">입장</button>
