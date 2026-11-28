@@ -528,9 +528,10 @@ function scrollBelowBar(el, extra = 10) {
   if (!el || el.hidden) return;
   const bar = document.querySelector('.topbar');
   const off = (bar ? bar.offsetHeight : 0) + extra;
-  const top = el.getBoundingClientRect().top + window.scrollY - off;
-  if (top < window.scrollY - 4 || el.getBoundingClientRect().top < off) {
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  const rect = el.getBoundingClientRect();
+  /* 화면 밖(위·아래)에 있거나 상단 바에 가려 있을 때만 움직입니다 */
+  if (rect.top < off || rect.top > off + 48) {
+    window.scrollTo({ top: Math.max(0, rect.top + window.scrollY - off), behavior: 'smooth' });
   }
 }
 
