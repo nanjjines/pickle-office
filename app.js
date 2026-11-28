@@ -969,10 +969,11 @@ function renderLockChip() {
   chip.hidden = !unlocked;
 }
 
-/* 접속 코드 다시 입력(잠금 화면 열기) */
+/* 접속 코드 다시 입력(잠금 화면 열기) — 코드는 화면에 미리 채우지 않습니다 */
 function openGateForCode() {
-  access.code = localStorage.getItem(LS_CODE) || '';
+  access.code = '';
   showGate('need-code', '새 초대 코드를 입력하면 이 브라우저가 그 코드로 다시 연결됩니다.');
+  $('lockClose').hidden = !subscribed;
 }
 
 async function leaveSeat() {
