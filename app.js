@@ -65,6 +65,7 @@ const LS_ME = 'pickle-office:me';
 const LS_CODE = 'pickle-office:code';
 
 const store = { members: {}, notices: {}, agendas: {}, tasks: {} };
+const loaded = { members: false, tasks: false, notices: false, agendas: false };
 let me = null;
 let selectedMember = null;
 let selectedAgenda = null;
@@ -131,6 +132,17 @@ function autoMessage(member, tasks = taskList()) {
   const doing = mine.filter((t) => (t.status || 'todo') === 'doing');
   if (doing.length) return `${shortTitle(doing[0].title)} 작업 중`;
   return '업무 진행 중';
+}
+
+/* 비서 목록 한 줄: 상태 + 자동 메시지 (같은 문구면 한 번만) */
+function listLine(m) {
+  const label = STATUS_LABEL[m.status] || '작업 중';
+  const msg = autoMessage(m);
+  return msg && msg !== label ? `${label} · ${msg}` : label;
+}
+
+function isPermissionError(err) {
+  return !!err && (err.code === 'PERMISSION_DENIED' || /permission[-_ ]denied/i.test(String(err.message || '')));
 }
 
 /* ---------------- 초기 시드 ---------------- */
@@ -209,18 +221,22 @@ function subscribe() {
 
   onValue(ref(db, 'office/members'), (snap) => {
     store.members = snap.val() || {};
+    loaded.members = true;
     afterMembersChange();
   });
   onValue(ref(db, 'office/notices'), (snap) => {
     store.notices = snap.val() || {};
+    loaded.notices = true;
     renderNotices();
   });
   onValue(ref(db, 'office/agendas'), (snap) => {
     store.agendas = snap.val() || {};
+    loaded.agendas = true;
     renderAgendas();
   });
   onValue(ref(db, 'office/tasks'), (snap) => {
     store.tasks = snap.val() || {};
+    loaded.tasks = true;
     renderTasks();
   });
 }
@@ -295,7 +311,8 @@ function afterMembersChange() {
 /* 모든 비서의 상태 메시지를 상태·담당 작업에 맞춰 자동 저장합니다 (값이 다를 때만 씁니다) */
 let msgTimer = null;
 function reconcileMessages() {
-  if (!unlocked) return;
+  /* 멤버·태스크가 모두 도착한 뒤에만 계산합니다 (도중에 잘못된 메시지로 덮어쓰지 않도록) */
+  if (!unlocked || !loaded.members || !loaded.tasks) return;
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => {
     const tasks = taskList();
@@ -470,7 +487,7 @@ canvas.addEventListener('click', (e) => {
  * 1단계 — 캐릭터 클릭: 상태메시지 말풍선
  * 2단계 — 그 말풍선을 클릭: 상세 행동·담당 작업이 아래에 펼쳐집니다 */
 function statusTasks(name) {
-  const order = COLUMNS.map((c) => c.key);
+  const order = ['doing', 'review', 'todo', 'done'];
   return taskList()
     .filter((t) => t.assignee === name)
     .sort((a, b) => order.indexOf(a.status || 'todo') - order.indexOf(b.status || 'todo'));
@@ -569,7 +586,7 @@ function renderMembers() {
       return `<li class="member-item ${selectedMember === m.id ? 'is-selected' : ''}" data-id="${esc(m.id)}" style="--mc:${c.base};--mc-soft:${c.light};--mc-deep:${c.deep}">
         <canvas class="ma" width="32" height="32" data-id="${esc(m.id)}" aria-hidden="true"></canvas>
         <span class="mi"><b>${esc(m.name)}</b>
-        <span>${STATUS_LABEL[m.status] || '작업 중'} · ${esc(autoMessage(m))}</span></span>
+        <span>${esc(listLine(m))}</span></span>
         <span class="dot ${esc(m.status || 'working')}" title="${esc(STATUS_LABEL[m.status] || '작업 중')}"></span>
       </li>`;
     })
@@ -963,16 +980,6 @@ function bindEvents() {
   $('joinName').addEventListener('input', renderJoinPreview);
   $('leaveBtn').addEventListener('click', leaveSeat);
 
-  $('shareBtn')?.addEventListener('click', async () => {
-    const url = location.href.split('?')[0];
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('주소를 복사했습니다 · 초대 코드는 따로 전달하세요');
-    } catch (err) {
-      window.prompt('아래 주소를 복사하세요', url);
-    }
-  });
-
   const grid = $('statusGrid');
   grid.innerHTML = STATUS_LIST.map(
     (s) => `<button type="button" class="status-btn" data-s="${s.key}"><i></i>${s.label}</button>`
@@ -1178,7 +1185,13 @@ async function lockSubmit(e) {
   } catch (err) {
     access.code = '';
     localStorage.removeItem(LS_CODE);
-    showGate('need-code', '초대 코드가 올바르지 않거나 회수되었습니다.', 'error');
+    showGate(
+      'need-code',
+      isPermissionError(err)
+        ? '초대 코드가 올바르지 않거나 회수되었습니다.'
+        : `연결에 실패했습니다 (${(err && (err.code || err.message)) || '알 수 없는 오류'}). 잠시 후 다시 시도해 주세요.`,
+      'error'
+    );
     return;
   }
   if (await canReadOffice()) {
@@ -1231,11 +1244,17 @@ async function authenticate() {
     } catch (err) {
       access.code = '';
       localStorage.removeItem(LS_CODE);
-      showGate('need-code', '초대 코드가 올바르지 않거나 회수되었습니다.', 'error');
+      showGate(
+        'need-code',
+        isPermissionError(err)
+          ? '초대 코드가 올바르지 않거나 회수되었습니다.'
+          : `연결에 실패했습니다 (${(err && (err.code || err.message)) || '알 수 없는 오류'}).`,
+        'error'
+      );
       return;
     }
   }
-  showGate('need-code', bound ? '연결이 만료되었습니다. 초대 코드를 다시 입력해 주세요.' : '허용된 비서만 들어올 수 있습니다. 초대 코드를 입력하세요.');
+  showGate('need-code', bound ? '연결이 만료되었습니다. 초대 코드를 다시 입력해 주세요.' : '');
 }
 
 function unlock() {
