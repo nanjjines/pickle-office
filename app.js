@@ -71,6 +71,8 @@ let selectedMember = null;
 let selectedAgenda = null;
 let detailMember = null;
 const access = { state: 'checking', code: '', uid: '' };
+/* 초대 링크에 실린 좌석(?seat=멤버ID) — 기존 자리를 그대로 이어 받습니다 */
+let pendingSeat = new URLSearchParams(location.search).get('seat') || '';
 let unlocked = false;
 let subscribed = false;
 const anims = new Map();
@@ -300,6 +302,7 @@ function afterMembersChange() {
   }
   if (selectedMember && !store.members[selectedMember]) { selectedMember = null; $('bubble').hidden = true; }
   if (detailMember && !store.members[detailMember]) closeDetail();
+  claimSeat();
   renderMembers();
   renderMeCard();
   syncAssigneeOptions();
@@ -308,8 +311,7 @@ function afterMembersChange() {
   reconcileMessages();
 }
 
-/* 모든 비서의 상태 메시지를 상태·담당 작업에 맞춰 자동 저장합니다 (값이 다를 때만 씁니다) */
-let msgTimer = null;
+/* 모든 비서의 상태 메시지를 상태·담당 작업에 맞춰 자동 저장합니다 (값이 다를 때만 씁니다) */let msgTimer = null;
 function reconcileMessages() {
   /* 멤버·태스크가 모두 도착한 뒤에만 계산합니다 (도중에 잘못된 메시지로 덮어쓰지 않도록) */
   if (!unlocked || !loaded.members || !loaded.tasks) return;
@@ -1226,11 +1228,25 @@ async function lockSubmit(e) {
   }
 }
 
+/* 초대 링크의 ?seat= 값으로 기존 자리를 이어 받습니다 (중복 좌석 생성 방지) */
+function claimSeat() {
+  if (!pendingSeat) return;
+  const m = store.members[pendingSeat];
+  if (!m) return;
+  me = { id: pendingSeat, name: m.name, consonant: m.consonant, color: m.color };
+  localStorage.setItem(LS_ME, JSON.stringify(me));
+  pendingSeat = '';
+  selectedMember = me.id;
+  registerPresence();
+  toast(`${me.name} 자리로 연결되었습니다`);
+}
+
 function stripCodeFromUrl() {
   try {
     const u = new URL(location.href);
-    if (!u.searchParams.has('code')) return;
+    if (!u.searchParams.has('code') && !u.searchParams.has('seat')) return;
     u.searchParams.delete('code');
+    u.searchParams.delete('seat');
     history.replaceState(null, '', u.pathname + (u.search ? u.search : '') + u.hash);
   } catch (err) { /* noop */ }
 }
