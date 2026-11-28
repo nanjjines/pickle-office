@@ -760,6 +760,9 @@ function renderTasks() {
       toast('삭제했습니다');
     });
   });
+  /* 담당 작업이 바뀌면 해당 비서의 상태 메시지도 다시 계산합니다 */
+  reconcileMessages();
+  if (detailMember) renderDetail();
 }
 
 function taskCard(t) {
@@ -1104,6 +1107,7 @@ function bindEvents() {
   $('cdClose').addEventListener('click', closeDetail);
   $('codeBtn').addEventListener('click', openGateForCode);
   $('lockForm').addEventListener('submit', lockSubmit);
+  $('lockClose').addEventListener('click', () => { hideGate(); });
 
   /* 상세 패널 바같을 누르면 닫힘 */
   document.addEventListener('click', (e) => {
