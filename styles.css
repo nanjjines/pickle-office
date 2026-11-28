@@ -299,7 +299,7 @@ main { padding: clamp(14px, 3vw, 28px) clamp(14px, 4vw, 40px); max-width: 1380px
 .status-btn[data-s="away"]    { --s: var(--gray-2);--s-soft: var(--slate-soft); --s-deep: var(--slate-deep); }
 /* 보조 상태 버튼: 자동 = 에메랄드 · 회의 중 = 블루 · 자리 비움 = 그레이 */
 .status-grid-aux { grid-template-columns: repeat(3, 1fr); }
-.status-grid-aux .status-btn { justify-content: center; padding: 6px 4px; font-size: 12px; }
+.status-grid-aux .status-btn { justify-content: center; padding: 6px 2px; font-size: 11.5px; white-space: nowrap; gap: 5px; }
 .status-btn[data-a="auto"]    { --s: var(--emerald); --s-soft: var(--emerald-soft); --s-deep: var(--emerald-deep); }
 .status-btn[data-a="meeting"] { --s: var(--blue);    --s-soft: var(--blue-soft);    --s-deep: var(--blue-deep); }
 .status-btn[data-a="away"]    { --s: var(--gray-2);  --s-soft: var(--slate-soft);   --s-deep: var(--slate-deep); }
