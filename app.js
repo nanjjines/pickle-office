@@ -425,6 +425,8 @@ function drawLoop(t) {
 
 function renderBubble() {
   const bubble = $('bubble');
+  /* 좁은 화면에서는 상세 패널이 열린 동안 말풍선을 접습니다(맵 아래를 가리지 않도록) */
+  if (detailMember && window.innerWidth <= 620) { bubble.hidden = true; return; }
   if (!selectedMember || !store.members[selectedMember]) { bubble.hidden = true; return; }
   const m = store.members[selectedMember];
   const d = drawn.find((x) => x.id === selectedMember);
@@ -517,6 +519,7 @@ function openDetail(id) {
   if (!id || !store.members[id]) return;
   detailMember = id;
   renderDetail();
+  renderBubble();
   scrollBelowBar($('charDetail'));
 }
 
@@ -535,6 +538,7 @@ function closeDetail() {
   detailMember = null;
   const el = $('charDetail');
   if (el) el.hidden = true;
+  renderBubble();
 }
 
 function renderDetail() {
